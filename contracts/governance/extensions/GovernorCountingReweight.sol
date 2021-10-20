@@ -22,11 +22,18 @@ abstract contract GovernorCountingReweight is Governor {
         uint256 abstainVotes;
     }
 
+    struct DelegateVote {
+        uint256 againstVotes;
+        uint256 forVotes;
+        uint256 abstainVotes;
+        uint256 snapshot;
+    }
+
     // proposalId => total votes
     mapping(uint256 => ProposalVote) private _proposalVotes;
 
     // proposalId => delegate => votes by delegate
-    mapping(uint256 => mapping(address => ProposalVote)) private _delegateVotes;
+    mapping(uint256 => mapping(address => DelegateVote)) private _delegateVotes;
 
     /**
      * @dev See {IGovernor-COUNTING_MODE}.
@@ -40,7 +47,7 @@ abstract contract GovernorCountingReweight is Governor {
      * @dev See {IGovernor-hasVoted}.
      */
     function hasVoted(uint256 proposalId, address account) public view virtual override returns (bool) {
-        ProposalVote storage vote = _delegateVotes[proposalId][account];
+        DelegateVote storage vote = _delegateVotes[proposalId][account];
         return vote.againstVotes > 0 || vote.forVotes > 0 || vote.abstainVotes > 0;
     }
 
@@ -89,21 +96,65 @@ abstract contract GovernorCountingReweight is Governor {
         uint256 weight
     ) internal virtual override {
         ProposalVote storage proposalvote = _proposalVotes[proposalId];
-        ProposalVote storage delegateVote = _delegateVotes[proposalId][account];
+        DelegateVote storage delegateVote = _delegateVotes[proposalId][account];
+
+        // The snapshot used for the initial vote is the snapshot of the proposal
+        delegateVote.snapshot = proposalSnapshot(proposalId);
 
         require(!hasVoted(proposalId, account), "GovernorVotingSimple: vote already cast");
 
         if (support == uint8(VoteType.Against)) {
             proposalvote.againstVotes += weight;
-            delegateVote.againstVotes += weight;
+            delegateVote.againstVotes = weight;
         } else if (support == uint8(VoteType.For)) {
             proposalvote.forVotes += weight;
-            delegateVote.forVotes += weight;
+            delegateVote.forVotes = weight;
         } else if (support == uint8(VoteType.Abstain)) {
             proposalvote.abstainVotes += weight;
-            delegateVote.abstainVotes += weight;
+            delegateVote.abstainVotes = weight;
         } else {
             revert("GovernorVotingSimple: invalid value for enum VoteType");
         }
+    }
+
+    function reweightVote(uint256 proposalId, address account, uint256 newSnapshot) public {
+        require(state(proposalId) == ProposalState.Active, "GovernorCountingReweight: Cannot reweight unless active");
+        require(hasVoted(proposalId, account), "GovernorCountingReweight: Cannot reweight before vote");
+
+        DelegateVote storage delegateVote = _delegateVotes[proposalId][account];
+        // TODO: Change to only after proposal snapshot, as delegates could go up and down and we want the min to stick
+        require(newSnapshot > delegateVote.snapshot, "GovernorCountingReweight: Cannot reweight to older snapshot");
+
+        uint256 currentWeight;
+        // 2 out of 3 are 0, so no risk of overflow
+        unchecked {
+            currentWeight = delegateVote.againstVotes + delegateVote.forVotes + delegateVote.abstainVotes;
+        }
+
+        uint256 newWeight = getVotes(account, newSnapshot);
+        require(newWeight < currentWeight, "GovernorCountingReweight: Cannot reweight higher");
+
+        // we've already checked the overflow case
+        uint256 weightDrop;
+        unchecked {
+            weightDrop = currentWeight - newWeight;
+        }
+
+        ProposalVote storage proposalVote = _proposalVotes[proposalId];
+
+        if (delegateVote.againstVotes > 0) {
+            delegateVote.againstVotes = newWeight;
+            proposalVote.againstVotes -= weightDrop;
+        } else if (delegateVote.forVotes > 0) {
+            delegateVote.forVotes = newWeight;
+            proposalVote.forVotes -= weightDrop;
+        } else {
+            delegateVote.abstainVotes = newWeight;
+            proposalVote.abstainVotes -= weightDrop;
+        }
+
+        delegateVote.snapshot = newSnapshot;
+
+        // TODO: Emit a Reweight Event
     }
 }
