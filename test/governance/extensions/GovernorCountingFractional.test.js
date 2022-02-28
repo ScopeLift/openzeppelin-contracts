@@ -280,4 +280,7 @@ contract('GovernorCountingFractional', function (accounts) {
     });
     runGovernorWorkflow();
   });
+
+  // TODO: more than 1 fractional voter
+  // TODO: perform fractional votes *then queue and execute*
 });
