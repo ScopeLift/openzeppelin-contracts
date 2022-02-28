@@ -152,7 +152,7 @@ contract('GovernorCountingFractional', function (accounts) {
     runGovernorWorkflow();
   });
 
-  describe('Voting with fractionalized parameters when all votes are abstain', function () {
+  describe('Voting with fractionalized parameters when all votes are Abstain', function () {
     const voter1Weight = web3.utils.toWei('0.2');
     const voter2Weight = web3.utils.toWei('10.0');
     beforeEach(async function () {
@@ -182,6 +182,92 @@ contract('GovernorCountingFractional', function (accounts) {
       const forVotes = new BN(0);
       const againstVotes = new BN(0);
       const abstainVotes = new BN(voter2Weight);
+
+      const params = web3.eth.abi.encodeParameters(['uint128', 'uint128'], [forVotes, againstVotes]);
+      const tx = await this.mock.castVoteWithReasonAndParams(this.id, 0, '', params, { from: voter2 });
+
+      expectEvent(tx, 'VoteCastWithParams', { voter: voter2, weight: voter2Weight, params });
+      const votes = await this.mock.proposalVotes(this.id);
+      expect(votes.forVotes).to.be.bignumber.equal(forVotes);
+      expect(votes.againstVotes).to.be.bignumber.equal((new BN(voter1Weight)).add(againstVotes))
+      expect(votes.abstainVotes).to.be.bignumber.equal(abstainVotes);
+    });
+    runGovernorWorkflow();
+  });
+
+  describe('Voting with fractionalized parameters when all votes are For', function () {
+    const voter1Weight = web3.utils.toWei('0.2');
+    const voter2Weight = web3.utils.toWei('10.0');
+    beforeEach(async function () {
+      this.settings = {
+        proposal: [
+          [this.receiver.address],
+          [0],
+          [this.receiver.contract.methods.mockFunction().encodeABI()],
+          '<proposal description>',
+        ],
+        proposer,
+        tokenHolder: owner,
+        voters: [
+          { voter: voter1, weight: voter1Weight, support: Enums.VoteType.Against },
+          { voter: voter2, weight: voter2Weight }, // do not actually vote, only getting tokens
+        ],
+        steps: {
+          wait: { enable: false },
+          execute: { enable: false },
+        },
+      };
+    });
+
+    afterEach(async function () {
+      expect(await this.mock.state(this.id)).to.be.bignumber.equal(Enums.ProposalState.Active);
+
+      const forVotes = new BN(voter2Weight);
+      const againstVotes = new BN(0);
+      const abstainVotes = new BN(0);
+
+      const params = web3.eth.abi.encodeParameters(['uint128', 'uint128'], [forVotes, againstVotes]);
+      const tx = await this.mock.castVoteWithReasonAndParams(this.id, 0, '', params, { from: voter2 });
+
+      expectEvent(tx, 'VoteCastWithParams', { voter: voter2, weight: voter2Weight, params });
+      const votes = await this.mock.proposalVotes(this.id);
+      expect(votes.forVotes).to.be.bignumber.equal(forVotes);
+      expect(votes.againstVotes).to.be.bignumber.equal((new BN(voter1Weight)).add(againstVotes))
+      expect(votes.abstainVotes).to.be.bignumber.equal(abstainVotes);
+    });
+    runGovernorWorkflow();
+  });
+
+  describe('Voting with fractionalized parameters when all votes are Against', function () {
+    const voter1Weight = web3.utils.toWei('0.2');
+    const voter2Weight = web3.utils.toWei('10.0');
+    beforeEach(async function () {
+      this.settings = {
+        proposal: [
+          [this.receiver.address],
+          [0],
+          [this.receiver.contract.methods.mockFunction().encodeABI()],
+          '<proposal description>',
+        ],
+        proposer,
+        tokenHolder: owner,
+        voters: [
+          { voter: voter1, weight: voter1Weight, support: Enums.VoteType.Against },
+          { voter: voter2, weight: voter2Weight }, // do not actually vote, only getting tokens
+        ],
+        steps: {
+          wait: { enable: false },
+          execute: { enable: false },
+        },
+      };
+    });
+
+    afterEach(async function () {
+      expect(await this.mock.state(this.id)).to.be.bignumber.equal(Enums.ProposalState.Active);
+
+      const forVotes = new BN(0);
+      const againstVotes = new BN(voter2Weight);
+      const abstainVotes = new BN(0);
 
       const params = web3.eth.abi.encodeParameters(['uint128', 'uint128'], [forVotes, againstVotes]);
       const tx = await this.mock.castVoteWithReasonAndParams(this.id, 0, '', params, { from: voter2 });
