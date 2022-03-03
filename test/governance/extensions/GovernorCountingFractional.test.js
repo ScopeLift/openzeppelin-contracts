@@ -7,7 +7,7 @@ const { EIP712Domain } = require('../../helpers/eip712');
 const { fromRpcSig } = require('ethereumjs-util');
 
 const { runGovernorWorkflow } = require('../GovernorWorkflow.behavior');
-const { expect } = require('chai');
+const { expect, assert } = require('chai');
 
 const Token = artifacts.require('ERC20VotesCompMock');
 const Governor = artifacts.require('GovernorFractionalMock');
@@ -457,6 +457,54 @@ const voter3Tx = await this.mock.castVoteWithReasonAndParams(this.id, 0, '', vot
       );
 
       expect(await this.mock.state(this.id)).to.be.bignumber.equal(Enums.ProposalState.Defeated);
+    });
+
+    runGovernorWorkflow();
+  });
+
+  describe('Fractional votes cannot exceed overall voter weight', function () {
+    const voter1Weight = web3.utils.toWei('5.8');
+    const voter2Weight = web3.utils.toWei('1.0');
+    beforeEach(async function () {
+      this.settings = {
+        proposal: [
+          [this.receiver.address],
+          [0],
+          [this.receiver.contract.methods.mockFunction().encodeABI()],
+          '<proposal description>',
+        ],
+        proposer,
+        tokenHolder: owner,
+        voters: [
+          { voter: voter1, weight: voter1Weight, support: Enums.VoteType.For },
+          // do not specify `support` so setup will not cast the votes, we do that later
+          { voter: voter2, weight: voter2Weight },
+        ],
+        steps: {
+          wait: { enable: false },
+          queue: { enable: false },
+          execute: { enable: false },
+        },
+      };
+    });
+
+    afterEach(async function () {
+      expect(await this.mock.state(this.id)).to.be.bignumber.equal(Enums.ProposalState.Active);
+
+      const forVotes = (new BN(voter2Weight)).mul(new BN(56)).div(new BN(100)); // 56%
+      const againstVotes = (new BN(voter2Weight)).mul(new BN(90)).div(new BN(100)); // 90%
+      const abstainVotes = (new BN(voter2Weight)).sub(forVotes).sub(againstVotes);
+
+      assert(
+        forVotes.add(againstVotes).gt(new BN(voter2Weight)),
+        "test assumption not met"
+      )
+
+      const params = web3.eth.abi.encodeParameters(['uint128', 'uint128'], [forVotes, againstVotes]);
+      await expectRevert(
+        this.mock.castVoteWithReasonAndParams(this.id, 0, '', params, { from: voter2 }),
+        'GovernorCountingFractional: Invalid Weight'
+      );
     });
 
     runGovernorWorkflow();
