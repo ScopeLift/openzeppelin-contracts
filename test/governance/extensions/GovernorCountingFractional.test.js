@@ -1,4 +1,4 @@
-const { BN, constants, expectEvent, time } = require('@openzeppelin/test-helpers');
+const { BN, constants, expectEvent, expectRevert, time } = require('@openzeppelin/test-helpers');
 const { web3 } = require('@openzeppelin/test-helpers/src/setup');
 const Enums = require('../../helpers/enums');
 const ethSigUtil = require('eth-sig-util');
@@ -405,5 +405,60 @@ const voter3Tx = await this.mock.castVoteWithReasonAndParams(this.id, 0, '', vot
     runGovernorWorkflow();
   });
 
-// TODO test weight split that adds to more than 100
+  describe('Proposals defeated through fractional votes cannot be executed', function () {
+    const voter1Weight = web3.utils.toWei('0.8');
+    const voter2Weight = web3.utils.toWei('1.0');
+    beforeEach(async function () {
+      this.settings = {
+        proposal: [
+          [this.receiver.address],
+          [0],
+          [this.receiver.contract.methods.mockFunction().encodeABI()],
+          '<proposal description>',
+        ],
+        proposer,
+        tokenHolder: owner,
+        voters: [
+          { voter: voter1, weight: voter1Weight, support: Enums.VoteType.For },
+          // do not specify `support` so setup will not cast the votes, we do that later
+          { voter: voter2, weight: voter2Weight },
+        ],
+        steps: {
+          wait: { enable: false },
+          // we're going to take these steps manually in our afterEach function
+          queue: { enable: false },
+          execute: { enable: false },
+        },
+      };
+    });
+
+    afterEach(async function () {
+      expect(await this.mock.state(this.id)).to.be.bignumber.equal(Enums.ProposalState.Active);
+
+      const forVotes = (new BN(voter2Weight)).mul(new BN(1)).div(new BN(100)); // 1%
+      const againstVotes = (new BN(voter2Weight)).mul(new BN(90)).div(new BN(100)); // 90%
+      const abstainVotes = (new BN(voter2Weight)).sub(forVotes).sub(againstVotes);
+
+      const params = web3.eth.abi.encodeParameters(['uint128', 'uint128'], [forVotes, againstVotes]);
+      const tx = await this.mock.castVoteWithReasonAndParams(this.id, 0, '', params, { from: voter2 });
+
+      expectEvent(tx, 'VoteCastWithParams', { voter: voter2, weight: voter2Weight, params });
+
+      // close out the voting period
+      await time.advanceBlockTo(this.deadline.addn(1));
+
+      // try to execute the proposal
+      const executer = voter2;
+      const proposal = this.settings.shortProposal; // defined in GovernorWorkflow.behavior
+      const executeFn = this.mock.methods['execute(address[],uint256[],bytes[],bytes32)']
+      await expectRevert(
+        executeFn(...proposal, { from: executer }),
+        'Governor: proposal not successful'
+      );
+
+      expect(await this.mock.state(this.id)).to.be.bignumber.equal(Enums.ProposalState.Defeated);
+    });
+
+    runGovernorWorkflow();
+  });
 });
