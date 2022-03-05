@@ -24,10 +24,10 @@ abstract contract GovernorCountingFractional is Governor {
         uint128 againstVotes;
         uint128 forVotes;
         uint128 abstainVotes;
-        mapping(address => bool) hasVoted;
     }
 
     mapping(uint256 => ProposalVote) private _proposalVotes;
+    mapping(uint256 => mapping(address => bool)) private _proposalVotersHasVoted;
 
     /**
      * @dev See {IGovernor-COUNTING_MODE}.
@@ -42,7 +42,7 @@ abstract contract GovernorCountingFractional is Governor {
      * @dev See {IGovernor-hasVoted}.
      */
     function hasVoted(uint256 proposalId, address account) public view virtual override returns (bool) {
-        return _proposalVotes[proposalId].hasVoted[account];
+        return _proposalVotersHasVoted[proposalId][account];
     }
 
     /**
@@ -90,10 +90,11 @@ abstract contract GovernorCountingFractional is Governor {
         uint256 weight,
         bytes memory params
     ) internal virtual override {
-        ProposalVote storage proposalvote = _proposalVotes[proposalId];
-
-        require(!proposalvote.hasVoted[account], "GovernorVotingSimple: vote already cast");
-        proposalvote.hasVoted[account] = true;
+        require(
+          !_proposalVotersHasVoted[proposalId][account],
+          "GovernorVotingSimple: vote already cast"
+        );
+        _proposalVotersHasVoted[proposalId][account] = true;
 
         uint128 forVotes;
         uint128 againstVotes;
@@ -118,8 +119,14 @@ abstract contract GovernorCountingFractional is Governor {
             }
         }
 
-        proposalvote.forVotes += forVotes;
-        proposalvote.againstVotes += againstVotes;
-        proposalvote.abstainVotes += abstainVotes;
+        ProposalVote memory existingProposalVote = _proposalVotes[proposalId];
+
+        ProposalVote memory _proposalvote = ProposalVote(
+          existingProposalVote.againstVotes + againstVotes,
+          existingProposalVote.forVotes + forVotes,
+          existingProposalVote.abstainVotes + abstainVotes
+        );
+
+        _proposalVotes[proposalId] = _proposalvote;
     }
 }
