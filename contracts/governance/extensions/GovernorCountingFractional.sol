@@ -21,9 +21,9 @@ abstract contract GovernorCountingFractional is Governor {
     }
 
     struct ProposalVote {
-        uint128 againstVotes;
-        uint128 forVotes;
-        uint128 abstainVotes;
+        uint80 againstVotes;
+        uint80 forVotes;
+        uint80 abstainVotes;
     }
 
     mapping(uint256 => ProposalVote) private _proposalVotes;
@@ -96,26 +96,26 @@ abstract contract GovernorCountingFractional is Governor {
         );
         _proposalVotersHasVoted[proposalId][account] = true;
 
-        uint128 forVotes;
-        uint128 againstVotes;
-        uint128 abstainVotes;
+        uint80 forVotes;
+        uint80 againstVotes;
+        uint80 abstainVotes;
 
         if (params.length == 0) {
             if (support == uint8(VoteType.Against)) {
-                againstVotes = uint128(weight);
+                againstVotes = uint80(weight);
             } else if (support == uint8(VoteType.For)) {
-                forVotes = uint128(weight);
+                forVotes = uint80(weight);
             } else if (support == uint8(VoteType.Abstain)) {
-               abstainVotes = uint128(weight);
+                abstainVotes = uint80(weight);
             } else {
                 revert("GovernorCountingFractional: invalid value for enum VoteType");
             }
         } else {
-            (forVotes, againstVotes) = abi.decode(params, (uint128, uint128));
+            (forVotes, againstVotes) = abi.decode(params, (uint80, uint80));
             require(forVotes + againstVotes <= weight, "GovernorCountingFractional: Invalid Weight");
             // prior require check ensures no overflow
             unchecked {
-                abstainVotes = uint128(weight) - forVotes - againstVotes;
+                abstainVotes = uint80(weight) - forVotes - againstVotes;
             }
         }
 
