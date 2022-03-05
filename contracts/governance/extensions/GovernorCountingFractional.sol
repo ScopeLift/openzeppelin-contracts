@@ -21,9 +21,9 @@ abstract contract GovernorCountingFractional is Governor {
     }
 
     struct ProposalVote {
-        uint256 againstVotes;
-        uint256 forVotes;
-        uint256 abstainVotes;
+        uint128 againstVotes;
+        uint128 forVotes;
+        uint128 abstainVotes;
         mapping(address => bool) hasVoted;
     }
 
