@@ -1,7 +1,6 @@
-const { BN, constants, expectEvent, expectRevert, time } = require('@openzeppelin/test-helpers');
+const { BN, expectEvent, expectRevert, time } = require('@openzeppelin/test-helpers');
 const { web3 } = require('@openzeppelin/test-helpers/src/setup');
 const Enums = require('../../helpers/enums');
-const ethSigUtil = require('eth-sig-util');
 const Wallet = require('ethereumjs-wallet').default;
 const { EIP712Domain } = require('../../helpers/eip712');
 const { fromRpcSig } = require('ethereumjs-util');
@@ -136,9 +135,9 @@ contract('GovernorCountingFractional', function (accounts) {
     afterEach(async function () {
       expect(await this.mock.state(this.id)).to.be.bignumber.equal(Enums.ProposalState.Active);
 
-      const forVotes = (new BN(voter2Weight)).mul(new BN(70)).div(new BN(100)); // 70 percent For
-      const againstVotes = (new BN(voter2Weight)).mul(new BN(20)).div(new BN(100)); // 20 percent Against
-      const abstainVotes = (new BN(voter2Weight)).sub(forVotes).sub(againstVotes);
+      const forVotes = new BN(voter2Weight).mul(new BN(70)).div(new BN(100)); // 70 percent For
+      const againstVotes = new BN(voter2Weight).mul(new BN(20)).div(new BN(100)); // 20 percent Against
+      const abstainVotes = new BN(voter2Weight).sub(forVotes).sub(againstVotes);
 
       const params = web3.eth.abi.encodeParameters(['uint80', 'uint80'], [forVotes, againstVotes]);
       const tx = await this.mock.castVoteWithReasonAndParams(this.id, 0, '', params, { from: voter2 });
@@ -146,7 +145,7 @@ contract('GovernorCountingFractional', function (accounts) {
       expectEvent(tx, 'VoteCastWithParams', { voter: voter2, weight: voter2Weight, params });
       const votes = await this.mock.proposalVotes(this.id);
       expect(votes.forVotes).to.be.bignumber.equal(forVotes);
-      expect(votes.againstVotes).to.be.bignumber.equal((new BN(voter1Weight)).add(againstVotes))
+      expect(votes.againstVotes).to.be.bignumber.equal(new BN(voter1Weight).add(againstVotes));
       expect(votes.abstainVotes).to.be.bignumber.equal(abstainVotes);
     });
     runGovernorWorkflow();
@@ -189,7 +188,7 @@ contract('GovernorCountingFractional', function (accounts) {
       expectEvent(tx, 'VoteCastWithParams', { voter: voter2, weight: voter2Weight, params });
       const votes = await this.mock.proposalVotes(this.id);
       expect(votes.forVotes).to.be.bignumber.equal(forVotes);
-      expect(votes.againstVotes).to.be.bignumber.equal((new BN(voter1Weight)).add(againstVotes))
+      expect(votes.againstVotes).to.be.bignumber.equal(new BN(voter1Weight).add(againstVotes));
       expect(votes.abstainVotes).to.be.bignumber.equal(abstainVotes);
     });
     runGovernorWorkflow();
@@ -232,7 +231,7 @@ contract('GovernorCountingFractional', function (accounts) {
       expectEvent(tx, 'VoteCastWithParams', { voter: voter2, weight: voter2Weight, params });
       const votes = await this.mock.proposalVotes(this.id);
       expect(votes.forVotes).to.be.bignumber.equal(forVotes);
-      expect(votes.againstVotes).to.be.bignumber.equal((new BN(voter1Weight)).add(againstVotes))
+      expect(votes.againstVotes).to.be.bignumber.equal(new BN(voter1Weight).add(againstVotes));
       expect(votes.abstainVotes).to.be.bignumber.equal(abstainVotes);
     });
     runGovernorWorkflow();
@@ -275,7 +274,7 @@ contract('GovernorCountingFractional', function (accounts) {
       expectEvent(tx, 'VoteCastWithParams', { voter: voter2, weight: voter2Weight, params });
       const votes = await this.mock.proposalVotes(this.id);
       expect(votes.forVotes).to.be.bignumber.equal(forVotes);
-      expect(votes.againstVotes).to.be.bignumber.equal((new BN(voter1Weight)).add(againstVotes))
+      expect(votes.againstVotes).to.be.bignumber.equal(new BN(voter1Weight).add(againstVotes));
       expect(votes.abstainVotes).to.be.bignumber.equal(abstainVotes);
     });
     runGovernorWorkflow();
@@ -311,38 +310,32 @@ contract('GovernorCountingFractional', function (accounts) {
     afterEach(async function () {
       expect(await this.mock.state(this.id)).to.be.bignumber.equal(Enums.ProposalState.Active);
 
-      const voter2ForVotes = (new BN(voter2Weight)).mul(new BN(70)).div(new BN(100)); // 70%
-      const voter2AgainstVotes = (new BN(voter2Weight)).mul(new BN(20)).div(new BN(100)); // 20%
-      const voter2AbstainVotes = (new BN(voter2Weight)).sub(voter2ForVotes).sub(voter2AgainstVotes);
+      const voter2ForVotes = new BN(voter2Weight).mul(new BN(70)).div(new BN(100)); // 70%
+      const voter2AgainstVotes = new BN(voter2Weight).mul(new BN(20)).div(new BN(100)); // 20%
+      const voter2AbstainVotes = new BN(voter2Weight).sub(voter2ForVotes).sub(voter2AgainstVotes);
 
-      const voter3ForVotes = (new BN(voter3Weight)).mul(new BN(15)).div(new BN(100)); // 15%
-      const voter3AgainstVotes = (new BN(voter3Weight)).mul(new BN(80)).div(new BN(100)); // 80%
-      const voter3AbstainVotes = (new BN(voter3Weight)).sub(voter3ForVotes).sub(voter3AgainstVotes);
+      const voter3ForVotes = new BN(voter3Weight).mul(new BN(15)).div(new BN(100)); // 15%
+      const voter3AgainstVotes = new BN(voter3Weight).mul(new BN(80)).div(new BN(100)); // 80%
+      const voter3AbstainVotes = new BN(voter3Weight).sub(voter3ForVotes).sub(voter3AgainstVotes);
 
       // voter 2 casts votes
       const voter2Params = web3.eth.abi.encodeParameters(['uint80', 'uint80'], [voter2ForVotes, voter2AgainstVotes]);
       const voter2Tx = await this.mock.castVoteWithReasonAndParams(this.id, 0, '', voter2Params, { from: voter2 });
-      expectEvent(
-        voter2Tx,
-        'VoteCastWithParams',
-        { voter: voter2, weight: voter2Weight, params: voter2Params }
-      );
+      expectEvent(voter2Tx, 'VoteCastWithParams', { voter: voter2, weight: voter2Weight, params: voter2Params });
       let votes = await this.mock.proposalVotes(this.id);
       expect(votes.forVotes).to.be.bignumber.equal(voter2ForVotes);
-      expect(votes.againstVotes).to.be.bignumber.equal((new BN(voter1Weight)).add(voter2AgainstVotes))
+      expect(votes.againstVotes).to.be.bignumber.equal(new BN(voter1Weight).add(voter2AgainstVotes));
       expect(votes.abstainVotes).to.be.bignumber.equal(voter2AbstainVotes);
 
       // voter 2 casts votes
       const voter3Params = web3.eth.abi.encodeParameters(['uint80', 'uint80'], [voter3ForVotes, voter3AgainstVotes]);
-const voter3Tx = await this.mock.castVoteWithReasonAndParams(this.id, 0, '', voter3Params, { from: voter3 });
-      expectEvent(
-        voter3Tx,
-        'VoteCastWithParams',
-        { voter: voter3, weight: voter3Weight, params: voter3Params }
-      );
+      const voter3Tx = await this.mock.castVoteWithReasonAndParams(this.id, 0, '', voter3Params, { from: voter3 });
+      expectEvent(voter3Tx, 'VoteCastWithParams', { voter: voter3, weight: voter3Weight, params: voter3Params });
       votes = await this.mock.proposalVotes(this.id);
       expect(votes.forVotes).to.be.bignumber.equal(voter3ForVotes.add(voter2ForVotes));
-      expect(votes.againstVotes).to.be.bignumber.equal((new BN(voter1Weight)).add(voter2AgainstVotes).add(voter3AgainstVotes))
+      expect(votes.againstVotes).to.be.bignumber.equal(
+        new BN(voter1Weight).add(voter2AgainstVotes).add(voter3AgainstVotes),
+      );
       expect(votes.abstainVotes).to.be.bignumber.equal(voter3AbstainVotes.add(voter2AbstainVotes));
     });
 
@@ -379,9 +372,9 @@ const voter3Tx = await this.mock.castVoteWithReasonAndParams(this.id, 0, '', vot
     afterEach(async function () {
       expect(await this.mock.state(this.id)).to.be.bignumber.equal(Enums.ProposalState.Active);
 
-      const forVotes = (new BN(voter2Weight)).mul(new BN(98)).div(new BN(100)); // 98%
-      const againstVotes = (new BN(voter2Weight)).mul(new BN(1)).div(new BN(100)); // 1%
-      const abstainVotes = (new BN(voter2Weight)).sub(forVotes).sub(againstVotes);
+      const forVotes = new BN(voter2Weight).mul(new BN(98)).div(new BN(100)); // 98%
+      const againstVotes = new BN(voter2Weight).mul(new BN(1)).div(new BN(100)); // 1%
+      const abstainVotes = new BN(voter2Weight).sub(forVotes).sub(againstVotes);
 
       const params = web3.eth.abi.encodeParameters(['uint80', 'uint80'], [forVotes, againstVotes]);
       const tx = await this.mock.castVoteWithReasonAndParams(this.id, 0, '', params, { from: voter2 });
@@ -395,7 +388,7 @@ const voter3Tx = await this.mock.castVoteWithReasonAndParams(this.id, 0, '', vot
       // execute the proposal
       const executer = voter2;
       const proposal = this.settings.shortProposal; // defined in GovernorWorkflow.behavior
-      const executeFn = this.mock.methods['execute(address[],uint256[],bytes[],bytes32)']
+      const executeFn = this.mock.methods['execute(address[],uint256[],bytes[],bytes32)'];
       const executionTx = await executeFn(...proposal, { from: executer });
 
       expectEvent(executionTx, 'ProposalExecuted', { proposalId: this.id });
@@ -435,9 +428,9 @@ const voter3Tx = await this.mock.castVoteWithReasonAndParams(this.id, 0, '', vot
     afterEach(async function () {
       expect(await this.mock.state(this.id)).to.be.bignumber.equal(Enums.ProposalState.Active);
 
-      const forVotes = (new BN(voter2Weight)).mul(new BN(1)).div(new BN(100)); // 1%
-      const againstVotes = (new BN(voter2Weight)).mul(new BN(90)).div(new BN(100)); // 90%
-      const abstainVotes = (new BN(voter2Weight)).sub(forVotes).sub(againstVotes);
+      const forVotes = new BN(voter2Weight).mul(new BN(1)).div(new BN(100)); // 1%
+      const againstVotes = new BN(voter2Weight).mul(new BN(90)).div(new BN(100)); // 90%
+      const abstainVotes = new BN(voter2Weight).sub(forVotes).sub(againstVotes);
 
       const params = web3.eth.abi.encodeParameters(['uint80', 'uint80'], [forVotes, againstVotes]);
       const tx = await this.mock.castVoteWithReasonAndParams(this.id, 0, '', params, { from: voter2 });
@@ -450,11 +443,8 @@ const voter3Tx = await this.mock.castVoteWithReasonAndParams(this.id, 0, '', vot
       // try to execute the proposal
       const executer = voter2;
       const proposal = this.settings.shortProposal; // defined in GovernorWorkflow.behavior
-      const executeFn = this.mock.methods['execute(address[],uint256[],bytes[],bytes32)']
-      await expectRevert(
-        executeFn(...proposal, { from: executer }),
-        'Governor: proposal not successful'
-      );
+      const executeFn = this.mock.methods['execute(address[],uint256[],bytes[],bytes32)'];
+      await expectRevert(executeFn(...proposal, { from: executer }), 'Governor: proposal not successful');
 
       expect(await this.mock.state(this.id)).to.be.bignumber.equal(Enums.ProposalState.Defeated);
     });
@@ -491,19 +481,16 @@ const voter3Tx = await this.mock.castVoteWithReasonAndParams(this.id, 0, '', vot
     afterEach(async function () {
       expect(await this.mock.state(this.id)).to.be.bignumber.equal(Enums.ProposalState.Active);
 
-      const forVotes = (new BN(voter2Weight)).mul(new BN(56)).div(new BN(100)); // 56%
-      const againstVotes = (new BN(voter2Weight)).mul(new BN(90)).div(new BN(100)); // 90%
-      const abstainVotes = (new BN(voter2Weight)).sub(forVotes).sub(againstVotes);
+      const forVotes = new BN(voter2Weight).mul(new BN(56)).div(new BN(100)); // 56%
+      const againstVotes = new BN(voter2Weight).mul(new BN(90)).div(new BN(100)); // 90%
+      const abstainVotes = new BN(voter2Weight).sub(forVotes).sub(againstVotes);
 
-      assert(
-        forVotes.add(againstVotes).gt(new BN(voter2Weight)),
-        "test assumption not met"
-      )
+      assert(forVotes.add(againstVotes).gt(new BN(voter2Weight)), 'test assumption not met');
 
       const params = web3.eth.abi.encodeParameters(['uint80', 'uint80'], [forVotes, againstVotes]);
       await expectRevert(
         this.mock.castVoteWithReasonAndParams(this.id, 0, '', params, { from: voter2 }),
-        'GovernorCountingFractional: Invalid Weight'
+        'GovernorCountingFractional: Invalid Weight',
       );
     });
 
