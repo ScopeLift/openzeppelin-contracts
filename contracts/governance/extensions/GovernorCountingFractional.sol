@@ -4,6 +4,7 @@
 pragma solidity ^0.8.0;
 
 import "../Governor.sol";
+import "../../utils/math/SafeCast.sol";
 
 /**
  * @dev Extension of {Governor} for 3 option fractional vote counting.
@@ -21,9 +22,9 @@ abstract contract GovernorCountingFractional is Governor {
     }
 
     struct ProposalVote {
-        uint80 againstVotes;
-        uint80 forVotes;
-        uint80 abstainVotes;
+        uint128 againstVotes;
+        uint128 forVotes;
+        uint128 abstainVotes;
     }
 
     mapping(uint256 => ProposalVote) private _proposalVotes;
@@ -96,26 +97,29 @@ abstract contract GovernorCountingFractional is Governor {
         );
         _proposalVotersHasVoted[proposalId][account] = true;
 
-        uint80 forVotes;
-        uint80 againstVotes;
-        uint80 abstainVotes;
+        uint128 forVotes;
+        uint128 againstVotes;
+        uint128 abstainVotes;
 
         if (params.length == 0) {
             if (support == uint8(VoteType.Against)) {
-                againstVotes = uint80(weight);
+                againstVotes = SafeCast.toUint128(weight);
             } else if (support == uint8(VoteType.For)) {
-                forVotes = uint80(weight);
+                forVotes = SafeCast.toUint128(weight);
             } else if (support == uint8(VoteType.Abstain)) {
-                abstainVotes = uint80(weight);
+                abstainVotes = SafeCast.toUint128(weight);
             } else {
                 revert("GovernorCountingFractional: invalid value for enum VoteType");
             }
         } else {
-            (forVotes, againstVotes) = abi.decode(params, (uint80, uint80));
-            require(forVotes + againstVotes <= weight, "GovernorCountingFractional: Invalid Weight");
+            (forVotes, againstVotes) = abi.decode(params, (uint128, uint128));
+            require(
+              forVotes + againstVotes <= SafeCast.toUint128(weight),
+              "GovernorCountingFractional: Invalid Weight"
+            );
             // prior require check ensures no overflow
             unchecked {
-                abstainVotes = uint80(weight) - forVotes - againstVotes;
+                abstainVotes = uint128(weight) - forVotes - againstVotes;
             }
         }
 
