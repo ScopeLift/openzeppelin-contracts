@@ -1,9 +1,6 @@
 const { BN, expectEvent, expectRevert, time } = require('@openzeppelin/test-helpers');
 const { web3 } = require('@openzeppelin/test-helpers/src/setup');
 const Enums = require('../../helpers/enums');
-const Wallet = require('ethereumjs-wallet').default;
-const { EIP712Domain } = require('../../helpers/eip712');
-const { fromRpcSig } = require('ethereumjs-util');
 
 const { runGovernorWorkflow } = require('../GovernorWorkflow.behavior');
 const { expect, assert } = require('chai');
@@ -16,7 +13,6 @@ contract('GovernorCountingFractional', function (accounts) {
   const [owner, proposer, voter1, voter2, voter3, voter4] = accounts;
 
   const name = 'OZ-Governor';
-  const version = '1';
   const tokenName = 'MockToken';
   const tokenSymbol = 'MTKN';
   const tokenSupply = web3.utils.toWei('100');
