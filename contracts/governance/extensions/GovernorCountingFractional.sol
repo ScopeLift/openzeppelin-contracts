@@ -5,6 +5,7 @@ pragma solidity ^0.8.0;
 
 import "../Governor.sol";
 import "../../utils/math/SafeCast.sol";
+import "../../utils/math/SafeMath.sol";
 
 /**
  * @dev Extension of {Governor} for 3 option fractional vote counting.
@@ -40,6 +41,13 @@ abstract contract GovernorCountingFractional is Governor {
     }
 
     /**
+     * @dev Precision of vote counts. This many units of precision is discarded when storing votes.
+     */
+    function VOTE_PRECISION() pure private returns (uint24 memory) {
+      return 1e6;
+    }
+
+    /**
      * @dev See {IGovernor-hasVoted}.
      */
     function hasVoted(uint256 proposalId, address account) public view virtual override returns (bool) {
@@ -60,7 +68,11 @@ abstract contract GovernorCountingFractional is Governor {
         )
     {
         ProposalVote storage proposalvote = _proposalVotes[proposalId];
-        return (proposalvote.againstVotes, proposalvote.forVotes, proposalvote.abstainVotes);
+        return (
+          SafeMath.tryMul(proposalvote.againstVotes, VOTE_PRECISION()),
+          SafeMath.tryMul(proposalvote.forVotes, VOTE_PRECISION()),
+          SafeMath.tryMul(proposalvote.abstainVotes, VOTE_PRECISION())
+        );
     }
 
     /**
@@ -103,24 +115,33 @@ abstract contract GovernorCountingFractional is Governor {
 
         if (params.length == 0) {
             if (support == uint8(VoteType.Against)) {
-                againstVotes = SafeCast.toUint80(weight);
+                againstVotes = SafeCast.toUint80(weight / VOTE_PRECISION());
             } else if (support == uint8(VoteType.For)) {
-                forVotes = SafeCast.toUint80(weight);
+                forVotes = SafeCast.toUint80(weight / VOTE_PRECISION());
             } else if (support == uint8(VoteType.Abstain)) {
-                abstainVotes = SafeCast.toUint80(weight);
+                abstainVotes = SafeCast.toUint80(weight / VOTE_PRECISION());
             } else {
                 revert("GovernorCountingFractional: invalid value for enum VoteType");
             }
         } else {
-            (forVotes, againstVotes) = abi.decode(params, (uint80, uint80));
+            uint128 _forVotes;
+            uint128 _againstVotes;
+            uint128 _abstainVotes;
+
+            (_forVotes, _againstVotes) = abi.decode(params, (uint128, uint128));
+
             require(
-              forVotes + againstVotes <= SafeCast.toUint80(weight),
+              _forVotes + _againstVotes <= SafeCast.toUint128(weight),
               "GovernorCountingFractional: Invalid Weight"
             );
             // prior require check ensures no overflow and safe casting
             unchecked {
-                abstainVotes = uint80(weight) - forVotes - againstVotes;
+                _abstainVotes = uint128(weight) - _forVotes - _againstVotes;
             }
+
+            forVotes = SafeCast.toUint80(_forVotes / VOTE_PRECISION());
+            againstVotes = SafeCast.toUint80(_againstVotes / VOTE_PRECISION());
+            abstainVotes = SafeCast.toUint80(_abstainVotes / VOTE_PRECISION());
         }
 
         ProposalVote memory existingProposalVote = _proposalVotes[proposalId];
