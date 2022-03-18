@@ -22,9 +22,9 @@ abstract contract GovernorCountingFractional is Governor {
     }
 
     struct ProposalVote {
-        uint128 againstVotes;
-        uint128 forVotes;
-        uint128 abstainVotes;
+        uint80 againstVotes;
+        uint80 forVotes;
+        uint80 abstainVotes;
     }
 
     mapping(uint256 => ProposalVote) private _proposalVotes;
@@ -97,29 +97,29 @@ abstract contract GovernorCountingFractional is Governor {
         );
         _proposalVotersHasVoted[proposalId][account] = true;
 
-        uint128 forVotes;
-        uint128 againstVotes;
-        uint128 abstainVotes;
+        uint80 forVotes;
+        uint80 againstVotes;
+        uint80 abstainVotes;
 
         if (params.length == 0) {
             if (support == uint8(VoteType.Against)) {
-                againstVotes = SafeCast.toUint128(weight);
+                againstVotes = SafeCast.toUint80(weight);
             } else if (support == uint8(VoteType.For)) {
-                forVotes = SafeCast.toUint128(weight);
+                forVotes = SafeCast.toUint80(weight);
             } else if (support == uint8(VoteType.Abstain)) {
-                abstainVotes = SafeCast.toUint128(weight);
+                abstainVotes = SafeCast.toUint80(weight);
             } else {
                 revert("GovernorCountingFractional: invalid value for enum VoteType");
             }
         } else {
-            (forVotes, againstVotes) = abi.decode(params, (uint128, uint128));
+            (forVotes, againstVotes) = abi.decode(params, (uint80, uint80));
             require(
-              forVotes + againstVotes <= SafeCast.toUint128(weight),
+              forVotes + againstVotes <= SafeCast.toUint80(weight),
               "GovernorCountingFractional: Invalid Weight"
             );
-            // prior require check ensures no overflow
+            // prior require check ensures no overflow and safe casting
             unchecked {
-                abstainVotes = uint128(weight) - forVotes - againstVotes;
+                abstainVotes = uint80(weight) - forVotes - againstVotes;
             }
         }
 
