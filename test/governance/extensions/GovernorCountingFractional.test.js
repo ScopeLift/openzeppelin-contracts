@@ -15,7 +15,7 @@ contract('GovernorCountingFractional', function (accounts) {
   const name = 'OZ-Governor';
   const tokenName = 'MockToken';
   const tokenSymbol = 'MTKN';
-  const tokenSupply = web3.utils.toWei('100');
+  const tokenSupply = web3.utils.toWei('9000000'); // needed for overflow testing
   const votingDelay = new BN(4);
   const votingPeriod = new BN(16);
 
@@ -488,6 +488,120 @@ contract('GovernorCountingFractional', function (accounts) {
         this.mock.castVoteWithReasonAndParams(this.id, 0, '', params, { from: voter2 }),
         'GovernorCountingFractional: Invalid Weight',
       );
+    });
+
+    runGovernorWorkflow();
+  });
+
+  describe('Protects against voting weight overflow - FOR', function () {
+    // this weight cannot be stored as a uint80; type(uint80).max == 1.2e24
+    const voter1Weight = web3.utils.toWei('1300000'); // 1.3e24
+    beforeEach(async function () {
+      this.settings = {
+        proposal: [
+          [this.receiver.address],
+          [0],
+          [this.receiver.contract.methods.mockFunction().encodeABI()],
+          '<proposal description>',
+        ],
+        proposer,
+        tokenHolder: owner,
+        voters: [
+          {
+            voter: voter1,
+            weight: voter1Weight,
+            support: Enums.VoteType.For,
+            error: "VM Exception while processing transaction: reverted with reason string 'SafeCast: value doesn't fit in 80 bits'",
+          },
+        ],
+        steps: {
+          wait: { enable: false },
+          queue: { enable: false },
+          execute: { enable: false },
+        },
+      };
+    });
+    runGovernorWorkflow();
+  });
+
+  describe('Protects against voting weight overflow - AGAINST', function () {
+    // this weight cannot be stored as a uint80; type(uint80).max == 1.2e24
+    const voter1Weight = web3.utils.toWei('1300000'); // 1.3e24
+    beforeEach(async function () {
+      this.settings = {
+        proposal: [
+          [this.receiver.address],
+          [0],
+          [this.receiver.contract.methods.mockFunction().encodeABI()],
+          '<proposal description>',
+        ],
+        proposer,
+        tokenHolder: owner,
+        voters: [
+          {
+            voter: voter1,
+            weight: voter1Weight,
+            support: Enums.VoteType.Against,
+            error: "VM Exception while processing transaction: reverted with reason string 'SafeCast: value doesn't fit in 80 bits'",
+          },
+        ],
+        steps: {
+          wait: { enable: false },
+          queue: { enable: false },
+          execute: { enable: false },
+        },
+      };
+    });
+    runGovernorWorkflow();
+  });
+
+  describe('Protects against fractional voting weight overflow', function () {
+    const voter1Weight = web3.utils.toWei('1.0');
+    // this weight cannot be stored as a uint80; type(uint80).max == 1.2e24
+    const voter2Weight = web3.utils.toWei('1300000'); // 1.3e24
+    beforeEach(async function () {
+      this.settings = {
+        proposal: [
+          [this.receiver.address],
+          [0],
+          [this.receiver.contract.methods.mockFunction().encodeABI()],
+          '<proposal description>',
+        ],
+        proposer,
+        tokenHolder: owner,
+        voters: [
+          { voter: voter1, weight: voter1Weight, support: Enums.VoteType.For },
+          // do not specify `support` so setup will not cast the votes, we do that later
+          { voter: voter2, weight: voter2Weight },
+        ],
+        steps: {
+          wait: { enable: false },
+          queue: { enable: false },
+          execute: { enable: false },
+        },
+      };
+    });
+
+    afterEach(async function () {
+      expect(await this.mock.state(this.id)).to.be.bignumber.equal(Enums.ProposalState.Active);
+
+      const forVotes = new BN(voter2Weight);
+      const againstVotes = new BN(0);
+      const abstainVotes = new BN(0);
+
+      const initVotes = await this.mock.proposalVotes(this.id);
+      const params = web3.eth.abi.encodeParameters(['uint128', 'uint128'], [forVotes, againstVotes]);
+      // The EVM throws an exception that hardhat is unable to parse:
+      //       "Transaction reverted and Hardhat couldn't infer the reason"
+      await expectRevert.unspecified(
+        this.mock.castVoteWithReasonAndParams(this.id, 0, '', params, { from: voter2 })
+      );
+
+      // The important thing is that the call reverts and no vote counts are changed
+      const currentVotes = await this.mock.proposalVotes(this.id);
+      expect(currentVotes.forVotes).to.be.bignumber.equal(initVotes.forVotes);
+      expect(currentVotes.againstVotes).to.be.bignumber.equal(initVotes.againstVotes);
+      expect(currentVotes.abstainVotes).to.be.bignumber.equal(initVotes.abstainVotes);
     });
 
     runGovernorWorkflow();
