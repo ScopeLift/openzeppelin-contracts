@@ -43,7 +43,7 @@ abstract contract GovernorCountingFractional is Governor {
     /**
      * @dev Precision of vote counts. This many units of precision is discarded when storing votes.
      */
-    function VOTE_PRECISION() pure private returns (uint24 memory) {
+    function VOTE_PRECISION() pure private returns (uint24) {
       return 1e6;
     }
 
