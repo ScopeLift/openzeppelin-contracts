@@ -69,9 +69,9 @@ abstract contract GovernorCountingFractional is Governor {
     {
         ProposalVote storage proposalvote = _proposalVotes[proposalId];
         return (
-          SafeMath.tryMul(proposalvote.againstVotes, VOTE_PRECISION()),
-          SafeMath.tryMul(proposalvote.forVotes, VOTE_PRECISION()),
-          SafeMath.tryMul(proposalvote.abstainVotes, VOTE_PRECISION())
+          proposalvote.againstVotes * VOTE_PRECISION(),
+          proposalvote.forVotes * VOTE_PRECISION(),
+          proposalvote.abstainVotes * VOTE_PRECISION()
         );
     }
 
