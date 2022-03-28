@@ -5,7 +5,10 @@ const Enums = require('../../helpers/enums');
 const { runGovernorWorkflow } = require('../GovernorWorkflow.behavior');
 const { expect, assert } = require('chai');
 
-const Token = artifacts.require('ERC20VotesCompMock');
+// we are using this instead of ERC20VotesComp because we need a really big
+// token supply to do overflow testing -- more than ERC20VotesComp's maxSupply
+const Token = artifacts.require('ERC20VotesMock');
+
 const Governor = artifacts.require('GovernorFractionalMock');
 const CallReceiver = artifacts.require('CallReceiverMock');
 
@@ -15,7 +18,8 @@ contract('GovernorCountingFractional', function (accounts) {
   const name = 'OZ-Governor';
   const tokenName = 'MockToken';
   const tokenSymbol = 'MTKN';
-  const tokenSupply = web3.utils.toWei('9000000'); // needed for overflow testing
+  // we need a really big supply to do overflow testing
+  const tokenSupply = web3.utils.toWei('3000000000000');
   const votingDelay = new BN(4);
   const votingPeriod = new BN(16);
 
@@ -494,8 +498,11 @@ contract('GovernorCountingFractional', function (accounts) {
   });
 
   describe('Protects against voting weight overflow - FOR', function () {
-    // this weight cannot be stored as a uint80; type(uint80).max == 1.2e24
-    const voter1Weight = web3.utils.toWei('1300000'); // 1.3e24
+    // to test for overflow, we need a number of votes greater than the max we
+    // can store; currently votes are stored as uint80's but we also truncate 6
+    // digits of precision from them.
+    // type(uint80).max == 1.2e24, multiplying by 1e6 gives us 1.2e30
+    const voter1Weight = web3.utils.toWei('1300000000000'); // 1.3e30
     beforeEach(async function () {
       this.settings = {
         proposal: [
@@ -525,8 +532,11 @@ contract('GovernorCountingFractional', function (accounts) {
   });
 
   describe('Protects against voting weight overflow - AGAINST', function () {
-    // this weight cannot be stored as a uint80; type(uint80).max == 1.2e24
-    const voter1Weight = web3.utils.toWei('1300000'); // 1.3e24
+    // to test for overflow, we need a number of votes greater than the max we
+    // can store; currently votes are stored as uint80's but we also truncate 6
+    // digits of precision from them.
+    // type(uint80).max == 1.2e24, multiplying by 1e6 gives us 1.2e30
+    const voter1Weight = web3.utils.toWei('1300000000000'); // 1.3e30
     beforeEach(async function () {
       this.settings = {
         proposal: [
@@ -557,8 +567,11 @@ contract('GovernorCountingFractional', function (accounts) {
 
   describe('Protects against fractional voting weight overflow', function () {
     const voter1Weight = web3.utils.toWei('1.0');
-    // this weight cannot be stored as a uint80; type(uint80).max == 1.2e24
-    const voter2Weight = web3.utils.toWei('1300000'); // 1.3e24
+    // To test for overflow, we need a number of votes greater than the max we
+    // can store; currently votes are stored as uint80's but we also truncate 6
+    // digits of precision from them.
+    // type(uint80).max == 1.2e24, multiplying by 1e6 gives us 1.2e30
+    const voter2Weight = web3.utils.toWei('1300000000000'); // 1.3e30
     beforeEach(async function () {
       this.settings = {
         proposal: [
