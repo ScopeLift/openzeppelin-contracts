@@ -43,7 +43,7 @@ abstract contract GovernorCountingFractional is Governor {
     /**
      * @dev Precision of vote counts. This many units of precision is discarded when storing votes.
      */
-    function VOTE_PRECISION() pure private returns (uint24) {
+    function _votePrecision() pure private returns (uint24) {
       return 1e6;
     }
 
@@ -69,9 +69,9 @@ abstract contract GovernorCountingFractional is Governor {
     {
         ProposalVote storage proposalvote = _proposalVotes[proposalId];
         return (
-          uint256(proposalvote.againstVotes) * VOTE_PRECISION(),
-          uint256(proposalvote.forVotes) * VOTE_PRECISION(),
-          uint256(proposalvote.abstainVotes) * VOTE_PRECISION()
+          uint256(proposalvote.againstVotes) * _votePrecision(),
+          uint256(proposalvote.forVotes) * _votePrecision(),
+          uint256(proposalvote.abstainVotes) * _votePrecision()
         );
     }
 
@@ -115,11 +115,11 @@ abstract contract GovernorCountingFractional is Governor {
 
         if (params.length == 0) {
             if (support == uint8(VoteType.Against)) {
-                againstVotes = SafeCast.toUint80(weight / VOTE_PRECISION());
+                againstVotes = SafeCast.toUint80(weight / _votePrecision());
             } else if (support == uint8(VoteType.For)) {
-                forVotes = SafeCast.toUint80(weight / VOTE_PRECISION());
+                forVotes = SafeCast.toUint80(weight / _votePrecision());
             } else if (support == uint8(VoteType.Abstain)) {
-                abstainVotes = SafeCast.toUint80(weight / VOTE_PRECISION());
+                abstainVotes = SafeCast.toUint80(weight / _votePrecision());
             } else {
                 revert("GovernorCountingFractional: invalid value for enum VoteType");
             }
@@ -139,9 +139,9 @@ abstract contract GovernorCountingFractional is Governor {
                 _abstainVotes = uint128(weight) - _forVotes - _againstVotes;
             }
 
-            forVotes = SafeCast.toUint80(_forVotes / VOTE_PRECISION());
-            againstVotes = SafeCast.toUint80(_againstVotes / VOTE_PRECISION());
-            abstainVotes = SafeCast.toUint80(_abstainVotes / VOTE_PRECISION());
+            forVotes = SafeCast.toUint80(_forVotes / _votePrecision());
+            againstVotes = SafeCast.toUint80(_againstVotes / _votePrecision());
+            abstainVotes = SafeCast.toUint80(_abstainVotes / _votePrecision());
         }
 
         ProposalVote memory existingProposalVote = _proposalVotes[proposalId];

@@ -374,7 +374,6 @@ contract('GovernorCountingFractional', function (accounts) {
 
       const forVotes = new BN(voter2Weight).mul(new BN(98)).div(new BN(100)); // 98%
       const againstVotes = new BN(voter2Weight).mul(new BN(1)).div(new BN(100)); // 1%
-      const abstainVotes = new BN(voter2Weight).sub(forVotes).sub(againstVotes);
 
       const params = web3.eth.abi.encodeParameters(['uint128', 'uint128'], [forVotes, againstVotes]);
       const tx = await this.mock.castVoteWithReasonAndParams(this.id, 0, '', params, { from: voter2 });
@@ -430,7 +429,6 @@ contract('GovernorCountingFractional', function (accounts) {
 
       const forVotes = new BN(voter2Weight).mul(new BN(1)).div(new BN(100)); // 1%
       const againstVotes = new BN(voter2Weight).mul(new BN(90)).div(new BN(100)); // 90%
-      const abstainVotes = new BN(voter2Weight).sub(forVotes).sub(againstVotes);
 
       const params = web3.eth.abi.encodeParameters(['uint128', 'uint128'], [forVotes, againstVotes]);
       const tx = await this.mock.castVoteWithReasonAndParams(this.id, 0, '', params, { from: voter2 });
@@ -483,7 +481,6 @@ contract('GovernorCountingFractional', function (accounts) {
 
       const forVotes = new BN(voter2Weight).mul(new BN(56)).div(new BN(100)); // 56%
       const againstVotes = new BN(voter2Weight).mul(new BN(90)).div(new BN(100)); // 90%
-      const abstainVotes = new BN(voter2Weight).sub(forVotes).sub(againstVotes);
 
       assert(forVotes.add(againstVotes).gt(new BN(voter2Weight)), 'test assumption not met');
 
@@ -518,7 +515,8 @@ contract('GovernorCountingFractional', function (accounts) {
             voter: voter1,
             weight: voter1Weight,
             support: Enums.VoteType.For,
-            error: "VM Exception while processing transaction: reverted with reason string 'SafeCast: value doesn't fit in 80 bits'",
+            error: 'VM Exception while processing transaction: reverted with ' +
+            'reason string \'SafeCast: value doesn\'t fit in 80 bits\'',
           },
         ],
         steps: {
@@ -552,7 +550,8 @@ contract('GovernorCountingFractional', function (accounts) {
             voter: voter1,
             weight: voter1Weight,
             support: Enums.VoteType.Against,
-            error: "VM Exception while processing transaction: reverted with reason string 'SafeCast: value doesn't fit in 80 bits'",
+            error: 'VM Exception while processing transaction: reverted with ' +
+            'reason string \'SafeCast: value doesn\'t fit in 80 bits\'',
           },
         ],
         steps: {
@@ -600,14 +599,13 @@ contract('GovernorCountingFractional', function (accounts) {
 
       const forVotes = new BN(voter2Weight);
       const againstVotes = new BN(0);
-      const abstainVotes = new BN(0);
 
       const initVotes = await this.mock.proposalVotes(this.id);
       const params = web3.eth.abi.encodeParameters(['uint128', 'uint128'], [forVotes, againstVotes]);
       // The EVM throws an exception that hardhat is unable to parse:
       //       "Transaction reverted and Hardhat couldn't infer the reason"
       await expectRevert.unspecified(
-        this.mock.castVoteWithReasonAndParams(this.id, 0, '', params, { from: voter2 })
+        this.mock.castVoteWithReasonAndParams(this.id, 0, '', params, { from: voter2 }),
       );
 
       // The important thing is that the call reverts and no vote counts are changed
@@ -694,9 +692,9 @@ contract('GovernorCountingFractional', function (accounts) {
   });
 
   describe('It correctly adds fractional votes after stripping precision', function () {
-    // we strip precision starting ...   v here
-    const voter1Weight =               '2999999';
-    const voter2Weight = '999999999999999000001';
+    // we strip precision  v here
+    const voter1Weight = '2999999';
+    const voter2Weight = '9000001';
     beforeEach(async function () {
       this.settings = {
         proposal: [
@@ -723,7 +721,7 @@ contract('GovernorCountingFractional', function (accounts) {
     afterEach(async function () {
       expect(await this.mock.state(this.id)).to.be.bignumber.equal(Enums.ProposalState.Active);
 
-      const forVotes = new BN('999999999999999000000');
+      const forVotes = new BN('9000000');
       const againstVotes = new BN('1');
       const abstainVotes = new BN(voter2Weight).sub(forVotes).sub(againstVotes);
 
