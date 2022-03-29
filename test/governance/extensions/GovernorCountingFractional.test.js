@@ -647,16 +647,16 @@ contract('GovernorCountingFractional', function (accounts) {
       const votes = await this.mock.proposalVotes(this.id);
       expect(votes.againstVotes).to.be.bignumber.equal(new BN('0'));
       expect(votes.abstainVotes).to.be.bignumber.equal(new BN('0'));
-      expect(votes.forVotes).to.be.bignumber.equal(new BN('42424242424242424242000000'));
+      expect(votes.forVotes).to.be.bignumber.equal(new BN('42424242424242424242424000'));
     });
 
     runGovernorWorkflow();
   });
 
   describe('It correctly adds votes after stripping precision', function () {
-    // we strip precision starting .....      v here
-    const voter1Weight = '33333333333333333333111111';
-    const voter2Weight = '11111111111111111111999999';
+    // we strip precision starting ............. here
+    const voter1Weight = '33333333333333333333333111';
+    const voter2Weight = '11111111111111111111111999';
     beforeEach(async function () {
       this.settings = {
         proposal: [
@@ -685,16 +685,16 @@ contract('GovernorCountingFractional', function (accounts) {
       const votes = await this.mock.proposalVotes(this.id);
       expect(votes.againstVotes).to.be.bignumber.equal(new BN('0'));
       expect(votes.abstainVotes).to.be.bignumber.equal(new BN('0'));
-      expect(votes.forVotes).to.be.bignumber.equal(new BN('44444444444444444444000000'));
+      expect(votes.forVotes).to.be.bignumber.equal(new BN('44444444444444444444444000'));
     });
 
     runGovernorWorkflow();
   });
 
   describe('It correctly adds fractional votes after stripping precision', function () {
-    // we strip precision  v here
-    const voter1Weight = '2999999';
-    const voter2Weight = '9000001';
+    // we strip precision     v here
+    const voter1Weight = '2999900';
+    const voter2Weight = '9000100';
     beforeEach(async function () {
       this.settings = {
         proposal: [
@@ -722,7 +722,7 @@ contract('GovernorCountingFractional', function (accounts) {
       expect(await this.mock.state(this.id)).to.be.bignumber.equal(Enums.ProposalState.Active);
 
       const forVotes = new BN('9000000');
-      const againstVotes = new BN('1');
+      const againstVotes = new BN('100');
       const abstainVotes = new BN(voter2Weight).sub(forVotes).sub(againstVotes);
 
       const params = web3.eth.abi.encodeParameters(['uint128', 'uint128'], [forVotes, againstVotes]);
@@ -731,8 +731,8 @@ contract('GovernorCountingFractional', function (accounts) {
       expectEvent(tx, 'VoteCastWithParams', { voter: voter2, weight: voter2Weight, params });
       const votes = await this.mock.proposalVotes(this.id);
       expect(votes.forVotes).to.be.bignumber.equal(forVotes);
-      // the votes have been stripped
-      expect(votes.againstVotes).to.be.bignumber.equal(new BN('2000000'));
+      // the votes have been stripped and the (partial) against votes were lost
+      expect(votes.againstVotes).to.be.bignumber.equal(new BN('2999000'));
       expect(votes.abstainVotes).to.be.bignumber.equal(abstainVotes);
     });
 
