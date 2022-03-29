@@ -22,11 +22,11 @@ abstract contract GovernorCountingFractional is Governor {
         Abstain
     }
 
-    struct ProposalVote {
-        uint80 againstVotes;
-        uint80 forVotes;
-        uint80 abstainVotes;
-    }
+    // TODO move to functions to save gas?
+    // Store votes as a defacto uint85 to pack them all into a single slot.
+    uint256 public constant BITS_PER_VOTE_TYPE = 85;
+    uint256 public constant MAX_VOTE_STORAGE_SIZE = 2 ** BITS_PER_VOTE_TYPE - 1;
+    uint256 public constant VOTE_STORAGE_MASK = 0x1fffffffffffffffffffff;
 
     // proposal id --> encoded votes
     mapping(uint256 => uint256) private _proposalVotes;
@@ -191,24 +191,20 @@ abstract contract GovernorCountingFractional is Governor {
         );
     }
 
-    uint256 public constant BITS = 85;
-    uint256 public constant MAX_UINT85 = 2 ** BITS - 1;
-    uint256 public constant MASK = 0x1fffffffffffffffffffff;
-
     function _encodeVotes(
       uint256 _for,
       uint256 _against,
       uint256 _abstain
     ) internal pure returns(uint256) {
-      require(_for <= MAX_UINT85, "too many for votes");
-      require(_against <= MAX_UINT85, "too many against votes");
-      require(_abstain <= MAX_UINT85, "too many abstain votes");
+      require(_for <= MAX_VOTE_STORAGE_SIZE, "too many for votes");
+      require(_against <= MAX_VOTE_STORAGE_SIZE, "too many against votes");
+      require(_abstain <= MAX_VOTE_STORAGE_SIZE, "too many abstain votes");
 
-      // Shift by BITS to move the value to the correct position.
+      // Shift by BITS_PER_VOTE_TYPE to move the value to the correct position.
       // x << y is equivalent to x * 2 ** y.
       uint256 _shiftedFor = _for;
-      uint256 _shiftedAgainst = _against << BITS;
-      uint256 _shiftedAbstain = _abstain << BITS * 2;
+      uint256 _shiftedAgainst = _against << BITS_PER_VOTE_TYPE;
+      uint256 _shiftedAbstain = _abstain << BITS_PER_VOTE_TYPE * 2;
 
       return _shiftedAbstain | _shiftedAgainst | _shiftedFor;
     }
@@ -218,8 +214,10 @@ abstract contract GovernorCountingFractional is Governor {
       uint256 _against,
       uint256 _abstain
     ) {
-      _for     = MASK & encodedVotes;
-      _against = MASK & encodedVotes >> BITS;
-      _abstain = MASK & encodedVotes >> BITS * 2;
+      // Reverse by BITS_PER_VOTE_TYPE to move the value back to the correct position.
+      // x >> y is equivalent to x / 2**y.
+      _for     = VOTE_STORAGE_MASK & encodedVotes;
+      _against = VOTE_STORAGE_MASK & encodedVotes >> BITS_PER_VOTE_TYPE;
+      _abstain = VOTE_STORAGE_MASK & encodedVotes >> BITS_PER_VOTE_TYPE * 2;
     }
 }
