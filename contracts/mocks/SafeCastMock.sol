@@ -24,6 +24,10 @@ contract SafeCastMock {
         return a.toUint96();
     }
 
+    function toUint88(uint256 a) public pure returns (uint88) {
+        return a.toUint88();
+    }
+
     function toUint80(uint256 a) public pure returns (uint80) {
         return a.toUint80();
     }
