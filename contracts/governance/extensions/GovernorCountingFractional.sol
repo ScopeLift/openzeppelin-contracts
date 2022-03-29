@@ -137,17 +137,19 @@ abstract contract GovernorCountingFractional is Governor {
         );
         _proposalVotersHasVoted[proposalId][account] = true;
 
-        uint80 forVotes;
-        uint80 againstVotes;
-        uint80 abstainVotes;
+        // These are the variables we ultimately encode and pack as uint85's.
+        // Use a uint88 because it's the closest to a uint85 without undershooting.
+        uint88 forVotes;
+        uint88 againstVotes;
+        uint88 abstainVotes;
 
         if (params.length == 0) {
             if (support == uint8(VoteType.Against)) {
-                againstVotes = SafeCast.toUint80(weight / _votePrecision());
+                againstVotes = SafeCast.toUint88(weight / _votePrecision());
             } else if (support == uint8(VoteType.For)) {
-                forVotes = SafeCast.toUint80(weight / _votePrecision());
+                forVotes = SafeCast.toUint88(weight / _votePrecision());
             } else if (support == uint8(VoteType.Abstain)) {
-                abstainVotes = SafeCast.toUint80(weight / _votePrecision());
+                abstainVotes = SafeCast.toUint88(weight / _votePrecision());
             } else {
                 revert("GovernorCountingFractional: invalid value for enum VoteType");
             }
@@ -167,9 +169,9 @@ abstract contract GovernorCountingFractional is Governor {
                 _abstainVotes = uint128(weight) - _forVotes - _againstVotes;
             }
 
-            forVotes = SafeCast.toUint80(_forVotes / _votePrecision());
-            againstVotes = SafeCast.toUint80(_againstVotes / _votePrecision());
-            abstainVotes = SafeCast.toUint80(_abstainVotes / _votePrecision());
+            forVotes = SafeCast.toUint88(_forVotes / _votePrecision());
+            againstVotes = SafeCast.toUint88(_againstVotes / _votePrecision());
+            abstainVotes = SafeCast.toUint88(_abstainVotes / _votePrecision());
         }
 
         uint256 existingProposalVote = _proposalVotes[proposalId];
