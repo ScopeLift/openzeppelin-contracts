@@ -495,11 +495,11 @@ contract('GovernorCountingFractional', function (accounts) {
   });
 
   describe('Protects against voting weight overflow - FOR', function () {
-    // to test for overflow, we need a number of votes greater than the max we
-    // can store; currently votes are stored as uint80's but we also truncate 6
-    // digits of precision from them.
-    // type(uint80).max == 1.2e24, multiplying by 1e6 gives us 1.2e30
-    const voter1Weight = web3.utils.toWei('1300000000000'); // 1.3e30
+    // To test for overflow, we need a number of votes greater than the max we can store;
+    // currently votes are stored as defacto uint85's but we also truncate 3 digits of
+    // precision from them.
+    // max uint85 == 2^85 - 1 == 3.9e25, multiplying by 1e3 gives us a true max of 3.9e28
+    const voter1Weight = web3.utils.toWei('390000000000'); // 3.9e29
     beforeEach(async function () {
       this.settings = {
         proposal: [
@@ -516,7 +516,7 @@ contract('GovernorCountingFractional', function (accounts) {
             weight: voter1Weight,
             support: Enums.VoteType.For,
             error: 'VM Exception while processing transaction: reverted with ' +
-            'reason string \'SafeCast: value doesn\'t fit in 80 bits\'',
+            'reason string \'SafeCast: value doesn\'t fit in 88 bits\'',
           },
         ],
         steps: {
@@ -530,11 +530,11 @@ contract('GovernorCountingFractional', function (accounts) {
   });
 
   describe('Protects against voting weight overflow - AGAINST', function () {
-    // to test for overflow, we need a number of votes greater than the max we
-    // can store; currently votes are stored as uint80's but we also truncate 6
-    // digits of precision from them.
-    // type(uint80).max == 1.2e24, multiplying by 1e6 gives us 1.2e30
-    const voter1Weight = web3.utils.toWei('1300000000000'); // 1.3e30
+    // To test for overflow, we need a number of votes greater than the max we can store;
+    // currently votes are stored as defacto uint85's but we also truncate 3 digits of
+    // precision from them.
+    // max uint85 == 2^85 - 1 == 3.9e25, multiplying by 1e3 gives us a true max of 3.9e28
+    const voter1Weight = web3.utils.toWei('390000000000'); // 3.9e29
     beforeEach(async function () {
       this.settings = {
         proposal: [
@@ -551,7 +551,7 @@ contract('GovernorCountingFractional', function (accounts) {
             weight: voter1Weight,
             support: Enums.VoteType.Against,
             error: 'VM Exception while processing transaction: reverted with ' +
-            'reason string \'SafeCast: value doesn\'t fit in 80 bits\'',
+            'reason string \'SafeCast: value doesn\'t fit in 88 bits\'',
           },
         ],
         steps: {
@@ -564,13 +564,48 @@ contract('GovernorCountingFractional', function (accounts) {
     runGovernorWorkflow();
   });
 
-  describe('Protects against fractional voting weight overflow', function () {
+  describe('Protects against voting weight overflow - ABSTAIN', function () {
+    // To test for overflow, we need a number of votes greater than the max we can store;
+    // currently votes are stored as defacto uint85's but we also truncate 3 digits of
+    // precision from them.
+    // max uint85 == 2^85 - 1 == 3.9e25, multiplying by 1e3 gives us a true max of 3.9e28
+    const voter1Weight = web3.utils.toWei('390000000000'); // 3.9e29
+    beforeEach(async function () {
+      this.settings = {
+        proposal: [
+          [this.receiver.address],
+          [0],
+          [this.receiver.contract.methods.mockFunction().encodeABI()],
+          '<proposal description>',
+        ],
+        proposer,
+        tokenHolder: owner,
+        voters: [
+          {
+            voter: voter1,
+            weight: voter1Weight,
+            support: Enums.VoteType.Abstain,
+            error: 'VM Exception while processing transaction: reverted with ' +
+            'reason string \'SafeCast: value doesn\'t fit in 88 bits\'',
+          },
+        ],
+        steps: {
+          wait: { enable: false },
+          queue: { enable: false },
+          execute: { enable: false },
+        },
+      };
+    });
+    runGovernorWorkflow();
+  });
+
+  describe('Protects against fractional voting weight overflow - FOR', function () {
     const voter1Weight = web3.utils.toWei('1.0');
-    // To test for overflow, we need a number of votes greater than the max we
-    // can store; currently votes are stored as uint80's but we also truncate 6
-    // digits of precision from them.
-    // type(uint80).max == 1.2e24, multiplying by 1e6 gives us 1.2e30
-    const voter2Weight = web3.utils.toWei('1300000000000'); // 1.3e30
+    // To test for overflow, we need a number of votes greater than the max we can store;
+    // currently votes are stored as defacto uint85's but we also truncate 3 digits of
+    // precision from them.
+    // max uint85 == 2^85 - 1 == 3.9e25, multiplying by 1e3 gives us a true max of 3.9e28
+    const voter2Weight = web3.utils.toWei('390000000000'); // 3.9e29
     beforeEach(async function () {
       this.settings = {
         proposal: [
@@ -602,10 +637,167 @@ contract('GovernorCountingFractional', function (accounts) {
 
       const initVotes = await this.mock.proposalVotes(this.id);
       const params = web3.eth.abi.encodeParameters(['uint128', 'uint128'], [forVotes, againstVotes]);
-      // The EVM throws an exception that hardhat is unable to parse:
-      //       "Transaction reverted and Hardhat couldn't infer the reason"
-      await expectRevert.unspecified(
+
+      await expectRevert(
         this.mock.castVoteWithReasonAndParams(this.id, 0, '', params, { from: voter2 }),
+        'SafeCast: value doesn\'t fit in 88 bits'
+      );
+
+      // The important thing is that the call reverts and no vote counts are changed
+      const currentVotes = await this.mock.proposalVotes(this.id);
+      expect(currentVotes.forVotes).to.be.bignumber.equal(initVotes.forVotes);
+      expect(currentVotes.againstVotes).to.be.bignumber.equal(initVotes.againstVotes);
+      expect(currentVotes.abstainVotes).to.be.bignumber.equal(initVotes.abstainVotes);
+    });
+
+    runGovernorWorkflow();
+  });
+
+  describe('It does not revert when the vote count is high but below the max', function () {
+    const voter1Weight = web3.utils.toWei('1.0');
+    // We want a number of votes *just* lesser than the max we can store. Currently votes
+    // are stored as defacto uint85's but we also truncate 3 digits of precision.
+    // max uint85 == 2^85 - 1 == 3.9e25, multiplying by 1e3 gives us a true max of 3.9e28
+    const voter2Weight = web3.utils.toWei('38000000000'); // 3.8e28
+    beforeEach(async function () {
+      this.settings = {
+        proposal: [
+          [this.receiver.address],
+          [0],
+          [this.receiver.contract.methods.mockFunction().encodeABI()],
+          '<proposal description>',
+        ],
+        proposer,
+        tokenHolder: owner,
+        voters: [
+          { voter: voter1, weight: voter1Weight, support: Enums.VoteType.Against },
+          // do not specify `support` so setup will not cast the votes, we do that later
+          { voter: voter2, weight: voter2Weight },
+        ],
+        steps: {
+          wait: { enable: false },
+          queue: { enable: false },
+          execute: { enable: false },
+        },
+      };
+    });
+
+    afterEach(async function () {
+      expect(await this.mock.state(this.id)).to.be.bignumber.equal(Enums.ProposalState.Active);
+
+      const forVotes = new BN(voter2Weight);
+      const againstVotes = new BN(0);
+
+      const initVotes = await this.mock.proposalVotes(this.id);
+      const params = web3.eth.abi.encodeParameters(['uint128', 'uint128'], [forVotes, againstVotes]);
+      const tx = await this.mock.castVoteWithReasonAndParams(this.id, 0, '', params, { from: voter2 })
+      expectEvent(tx, 'VoteCastWithParams', { voter: voter2, weight: voter2Weight, params });
+
+      const currentVotes = await this.mock.proposalVotes(this.id);
+      expect(currentVotes.forVotes).to.be.bignumber.equal(forVotes);
+      // other vote counts shouldn't have changed
+      expect(currentVotes.againstVotes).to.be.bignumber.equal(initVotes.againstVotes);
+      expect(currentVotes.abstainVotes).to.be.bignumber.equal(initVotes.abstainVotes);
+    });
+
+    runGovernorWorkflow();
+  });
+
+  describe('Protects against fractional voting weight overflow - AGAINST', function () {
+    const voter1Weight = web3.utils.toWei('1.0');
+    // To test for overflow, we need a number of votes greater than the max we can store;
+    // currently votes are stored as defacto uint85's but we also truncate 3 digits of
+    // precision from them.
+    // max uint85 == 2^85 - 1 == 3.9e25, multiplying by 1e3 gives us a true max of 3.9e28
+    const voter2Weight = web3.utils.toWei('390000000000'); // 3.9e29
+    beforeEach(async function () {
+      this.settings = {
+        proposal: [
+          [this.receiver.address],
+          [0],
+          [this.receiver.contract.methods.mockFunction().encodeABI()],
+          '<proposal description>',
+        ],
+        proposer,
+        tokenHolder: owner,
+        voters: [
+          { voter: voter1, weight: voter1Weight, support: Enums.VoteType.For },
+          // do not specify `support` so setup will not cast the votes, we do that later
+          { voter: voter2, weight: voter2Weight },
+        ],
+        steps: {
+          wait: { enable: false },
+          queue: { enable: false },
+          execute: { enable: false },
+        },
+      };
+    });
+
+    afterEach(async function () {
+      expect(await this.mock.state(this.id)).to.be.bignumber.equal(Enums.ProposalState.Active);
+
+      const forVotes = new BN(0);
+      const againstVotes = new BN(voter2Weight);
+
+      const initVotes = await this.mock.proposalVotes(this.id);
+      const params = web3.eth.abi.encodeParameters(['uint128', 'uint128'], [forVotes, againstVotes]);
+      await expectRevert(
+        this.mock.castVoteWithReasonAndParams(this.id, 0, '', params, { from: voter2 }),
+        'SafeCast: value doesn\'t fit in 88 bits'
+      );
+
+      // The important thing is that the call reverts and no vote counts are changed
+      const currentVotes = await this.mock.proposalVotes(this.id);
+      expect(currentVotes.forVotes).to.be.bignumber.equal(initVotes.forVotes);
+      expect(currentVotes.againstVotes).to.be.bignumber.equal(initVotes.againstVotes);
+      expect(currentVotes.abstainVotes).to.be.bignumber.equal(initVotes.abstainVotes);
+    });
+
+    runGovernorWorkflow();
+  });
+
+  describe('Protects against fractional voting weight overflow - ABSTAIN', function () {
+    const voter1Weight = web3.utils.toWei('1.0');
+    // To test for overflow, we need a number of votes greater than the max we can store;
+    // currently votes are stored as defacto uint85's but we also truncate 3 digits of
+    // precision from them.
+    // max uint85 == 2^85 - 1 == 3.9e25, multiplying by 1e3 gives us a true max of 3.9e28
+    const voter2Weight = web3.utils.toWei('390000000000'); // 3.9e29
+    beforeEach(async function () {
+      this.settings = {
+        proposal: [
+          [this.receiver.address],
+          [0],
+          [this.receiver.contract.methods.mockFunction().encodeABI()],
+          '<proposal description>',
+        ],
+        proposer,
+        tokenHolder: owner,
+        voters: [
+          { voter: voter1, weight: voter1Weight, support: Enums.VoteType.For },
+          // do not specify `support` so setup will not cast the votes, we do that later
+          { voter: voter2, weight: voter2Weight },
+        ],
+        steps: {
+          wait: { enable: false },
+          queue: { enable: false },
+          execute: { enable: false },
+        },
+      };
+    });
+
+    afterEach(async function () {
+      expect(await this.mock.state(this.id)).to.be.bignumber.equal(Enums.ProposalState.Active);
+
+      // this will cause us to overflow ABSTAIN
+      const forVotes = new BN(0);
+      const againstVotes = new BN(0);
+
+      const initVotes = await this.mock.proposalVotes(this.id);
+      const params = web3.eth.abi.encodeParameters(['uint128', 'uint128'], [forVotes, againstVotes]);
+      await expectRevert(
+        this.mock.castVoteWithReasonAndParams(this.id, 0, '', params, { from: voter2 }),
+        'SafeCast: value doesn\'t fit in 88 bits'
       );
 
       // The important thing is that the call reverts and no vote counts are changed
