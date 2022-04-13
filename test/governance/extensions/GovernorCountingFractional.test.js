@@ -20,6 +20,13 @@ contract('GovernorCountingFractional', function (accounts) {
   const votingDelay = new BN(4);
   const votingPeriod = new BN(16);
 
+  const encodePackedVotes = (votes = {}) => {
+    return web3.utils.encodePacked(
+      {value: votes.forVotes, type: 'uint128'},
+      {value: votes.againstVotes, type: 'uint128'}
+    );
+  }
+
   beforeEach(async function () {
     this.chainId = await web3.eth.getChainId();
     this.owner = owner;
@@ -165,7 +172,7 @@ contract('GovernorCountingFractional', function (accounts) {
     const abstainVotes = new BN(voter2Weight).sub(forVotes).sub(againstVotes);
 
     // cast fractional votes
-    const params = web3.eth.abi.encodeParameters(['uint128', 'uint128'], [forVotes, againstVotes]);
+    const params = encodePackedVotes({forVotes, againstVotes});
     const tx = await this.mock.castVoteWithReasonAndParams(this.proposal.id, 0, '', params, { from: voter2 });
 
     expectEvent(tx, 'VoteCastWithParams', { voter: voter2, weight: voter2Weight, params });
@@ -193,7 +200,7 @@ contract('GovernorCountingFractional', function (accounts) {
     const abstainVotes = new BN(voter2Weight);
 
     // cast fractional votes
-    const params = web3.eth.abi.encodeParameters(['uint128', 'uint128'], [forVotes, againstVotes]);
+    const params = encodePackedVotes({forVotes, againstVotes});
     const tx = await this.mock.castVoteWithReasonAndParams(this.proposal.id, 0, '', params, { from: voter2 });
 
     expectEvent(tx, 'VoteCastWithParams', { voter: voter2, weight: voter2Weight, params });
@@ -221,7 +228,7 @@ contract('GovernorCountingFractional', function (accounts) {
     const abstainVotes = new BN(0);
 
     // cast fractional votes
-    const params = web3.eth.abi.encodeParameters(['uint128', 'uint128'], [forVotes, againstVotes]);
+    const params = encodePackedVotes({forVotes, againstVotes});
     const tx = await this.mock.castVoteWithReasonAndParams(this.proposal.id, 0, '', params, { from: voter2 });
 
     expectEvent(tx, 'VoteCastWithParams', { voter: voter2, weight: voter2Weight, params });
@@ -255,7 +262,7 @@ contract('GovernorCountingFractional', function (accounts) {
     const voter3AbstainVotes = new BN(voter3Weight).sub(voter3ForVotes).sub(voter3AgainstVotes);
 
     // voter 2 casts votes
-    const voter2Params = web3.eth.abi.encodeParameters(['uint128', 'uint128'], [voter2ForVotes, voter2AgainstVotes]);
+    const voter2Params = encodePackedVotes({forVotes: voter2ForVotes, againstVotes: voter2AgainstVotes});
     const voter2Tx = await this.mock.castVoteWithReasonAndParams(this.proposal.id, 0, '', voter2Params, {
       from: voter2,
     });
@@ -266,7 +273,7 @@ contract('GovernorCountingFractional', function (accounts) {
     expect(votes.abstainVotes).to.be.bignumber.equal(voter2AbstainVotes);
 
     // voter 2 casts votes
-    const voter3Params = web3.eth.abi.encodeParameters(['uint128', 'uint128'], [voter3ForVotes, voter3AgainstVotes]);
+    const voter3Params = encodePackedVotes({forVotes: voter3ForVotes, againstVotes: voter3AgainstVotes});
     const voter3Tx = await this.mock.castVoteWithReasonAndParams(this.proposal.id, 0, '', voter3Params, {
       from: voter3,
     });
@@ -294,7 +301,7 @@ contract('GovernorCountingFractional', function (accounts) {
     const forVotes = new BN(voter2Weight).mul(new BN(98)).div(new BN(100)); // 98%
     const againstVotes = new BN(voter2Weight).mul(new BN(1)).div(new BN(100)); // 1%
 
-    const params = web3.eth.abi.encodeParameters(['uint128', 'uint128'], [forVotes, againstVotes]);
+    const params = encodePackedVotes({forVotes, againstVotes});
     const tx = await this.mock.castVoteWithReasonAndParams(this.proposal.id, 0, '', params, { from: voter2 });
     expectEvent(tx, 'VoteCastWithParams', { voter: voter2, weight: voter2Weight, params });
 
@@ -323,7 +330,7 @@ contract('GovernorCountingFractional', function (accounts) {
     const forVotes = new BN(voter2Weight).mul(new BN(1)).div(new BN(100)); // 1%
     const againstVotes = new BN(voter2Weight).mul(new BN(90)).div(new BN(100)); // 90%
 
-    const params = web3.eth.abi.encodeParameters(['uint128', 'uint128'], [forVotes, againstVotes]);
+    const params = encodePackedVotes({forVotes, againstVotes});
     // the support type doesn't matter, specifically choosing FOR to demonstrate this
     const tx = await this.helper.vote({ support: Enums.VoteType.For, params }, { from: voter2 });
     expectEvent(tx, 'VoteCastWithParams', { voter: voter2, weight: voter2Weight, params });
@@ -352,7 +359,7 @@ contract('GovernorCountingFractional', function (accounts) {
     const againstVotes = new BN(voter2Weight).mul(new BN(90)).div(new BN(100)); // 90%
     assert(forVotes.add(againstVotes).gt(new BN(voter2Weight)), 'test assumption not met');
 
-    const params = web3.eth.abi.encodeParameters(['uint128', 'uint128'], [forVotes, againstVotes]);
+    const params = encodePackedVotes({forVotes, againstVotes});
     await expectRevert(
       this.helper.vote({ support: Enums.VoteType.For, params }, { from: voter2 }),
       'GovernorCountingFractional: Invalid Weight',
@@ -389,21 +396,20 @@ contract('GovernorCountingFractional', function (accounts) {
   [
     {
       overflowType: 'FOR',
-      params: web3.eth.abi.encodeParameters(['uint136', 'uint136'], [overflowWeight, 0]),
-      // the contract will throw when it attempts to decode the params
-      revertError: 'Transaction reverted and Hardhat couldn\'t infer the reason.',
+      params: web3.utils.encodePacked({
+        // shift the bits left by 127, shifting by 128 will overflow -- as expected
+        value: overflowWeight.mul(new BN(2).pow(new BN(127))),
+        type: 'uint256'}
+      ),
     },
     {
       overflowType: 'AGAINST',
-      params: web3.eth.abi.encodeParameters(['uint256', 'uint256'], [0, overflowWeight]),
-      // the contract will throw when it attempts to decode the params
-      revertError: 'Transaction reverted and Hardhat couldn\'t infer the reason.',
+      // encoding as uint256 will zero pad to the left: which is what we want
+      params: web3.utils.encodePacked({value: overflowWeight, type: 'uint256'}),
     },
     {
       overflowType: 'ABSTAIN',
-      params: web3.eth.abi.encodeParameters(['uint256', 'uint256'], [0, 0]),
-      // the contract will throw when it attempts to cast the weight
-      revertError: 'SafeCast: value doesn\'t fit in 128 bits',
+      params: web3.utils.encodePacked({value: 0, type: 'uint256'}),
     },
   ].forEach((test) => {
     it(`Protects against fractional voting weight overflow - ${test.overflowType}`, async function () {
@@ -422,7 +428,7 @@ contract('GovernorCountingFractional', function (accounts) {
       const thisValueIsIgnoredWhenUsingParams = Enums.VoteType.For;
       await expectRevert(
         this.helper.vote({ support: thisValueIsIgnoredWhenUsingParams, params: test.params }, { from: voter1 }),
-        test.revertError,
+        'SafeCast: value doesn\'t fit in 128 bits',
       );
 
       // The important thing is that the call reverts and no vote counts are changed
