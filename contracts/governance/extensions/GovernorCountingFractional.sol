@@ -109,7 +109,11 @@ abstract contract GovernorCountingFractional is Governor {
                 revert("GovernorCountingFractional: invalid value for enum VoteType");
             }
         } else {
-            (forVotes, againstVotes) = abi.decode(params, (uint128, uint128));
+            uint256 decoded = abi.decode(params, (uint256));
+            forVotes = SafeCast.toUint128(decoded >> 128); // keep left-most 128 bits
+            uint256 mask = 2**128 - 1; // 128 bits of 0's, 128 bits of 1's
+            againstVotes = SafeCast.toUint128(mask & decoded); // keep right-most 128 bits
+
             require(
                 forVotes + againstVotes <= SafeCast.toUint128(weight),
                 "GovernorCountingFractional: Invalid Weight"
