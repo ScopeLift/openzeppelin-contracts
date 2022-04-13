@@ -11,7 +11,7 @@ const {
   shouldSupportInterfaces,
 } = require('../../utils/introspection/SupportsInterface.behavior');
 
-const Token = artifacts.require('ERC20VotesMock');
+const Token = artifacts.require('ERC20VotesMock'); // we need a max supply > type(uint128).max
 const Governor = artifacts.require('GovernorFractionalMock');
 const CallReceiver = artifacts.require('CallReceiverMock');
 const ERC721Mock = artifacts.require('ERC721Mock');
@@ -23,7 +23,8 @@ contract('GovernorCountingFractional', function (accounts) {
   const name = 'OZ-Governor';
   const tokenName = 'MockToken';
   const tokenSymbol = 'MTKN';
-  const tokenSupply = web3.utils.toWei('100');
+  const tokenSupply = (new BN('2')).pow(new BN('224')).sub(new BN('10')); // nearly the max allowable
+  const overflowWeight = new BN(web3.utils.toWei('350000000000000000000')); // > type(uint128).max
   const votingDelay = new BN(4);
   const votingPeriod = new BN(16);
 
@@ -383,60 +384,80 @@ contract('GovernorCountingFractional', function (accounts) {
     );
   });
 
-  it('Protects against fractional voting weight overflow - FOR', async function () {
-    const voter1Weight = web3.utils.toWei('1.0');
-    // To test for overflow, we need a number of votes greater than the max we can store.
-    // Votes are stored as uint128's max uint128 == 2^128 - 1 == 3.4e38
-    const voter2Weight = web3.utils.toWei('350000000000000000000'); // 3.5e38
+  [
+    { overflowType: "FOR", supportType: Enums.VoteType.For },
+    { overflowType: "AGAINST", supportType: Enums.VoteType.Against },
+    { overflowType: "ABSTAIN", supportType: Enums.VoteType.Abstain },
+  ].forEach((test) => {
+    it(`Protects against voting weight overflow - ${test.overflowType}`, async function () {
+      const voter1Weight = overflowWeight.toString();
+      await this.token.transfer(voter1, voter1Weight, { from: owner });
 
+      await this.helper.propose({ from: proposer });
+      await this.helper.waitForSnapshot();
+      expect(await this.mock.state(this.proposal.id)).to.be.bignumber.equal(Enums.ProposalState.Pending);
 
-
-
-    beforeEach(async function () {
-      this.settings = {
-        proposal: [
-          [this.receiver.address],
-          [0],
-          [this.receiver.contract.methods.mockFunction().encodeABI()],
-          '<proposal description>',
-        ],
-        proposer,
-        tokenHolder: owner,
-        voters: [
-          { voter: voter1, weight: voter1Weight, support: Enums.VoteType.For },
-          // do not specify `support` so setup will not cast the votes, we do that later
-          { voter: voter2, weight: voter2Weight },
-        ],
-        steps: {
-          wait: { enable: false },
-          queue: { enable: false },
-          execute: { enable: false },
-        },
-      };
-    });
-
-    afterEach(async function () {
-      expect(await this.mock.state(this.id)).to.be.bignumber.equal(Enums.ProposalState.Active);
-
-      const forVotes = new BN(voter2Weight);
-      const againstVotes = new BN(0);
-
-      const initVotes = await this.mock.proposalVotes(this.id);
-      const params = web3.eth.abi.encodeParameters(['uint128', 'uint128'], [forVotes, againstVotes]);
-
+      const initVotes = await this.mock.proposalVotes(this.proposal.id);
       await expectRevert(
-        this.mock.castVoteWithReasonAndParams(this.id, 0, '', params, { from: voter2 }),
-        'SafeCast: value doesn\'t fit in 88 bits'
+        this.helper.vote({ support: test.supportType }, { from: voter1 }),
+        'SafeCast: value doesn\'t fit in 128 bits'
       );
 
       // The important thing is that the call reverts and no vote counts are changed
-      const currentVotes = await this.mock.proposalVotes(this.id);
+      const currentVotes = await this.mock.proposalVotes(this.proposal.id);
       expect(currentVotes.forVotes).to.be.bignumber.equal(initVotes.forVotes);
       expect(currentVotes.againstVotes).to.be.bignumber.equal(initVotes.againstVotes);
       expect(currentVotes.abstainVotes).to.be.bignumber.equal(initVotes.abstainVotes);
     });
-
-    runGovernorWorkflow();
   });
 
+  [
+    {
+      overflowType: "FOR",
+      params: web3.eth.abi.encodeParameters(['uint136', 'uint136'], [overflowWeight, 0]),
+      // the contract will throw when it attempts to decode the params
+      revertError: 'Transaction reverted and Hardhat couldn\'t infer the reason.',
+    },
+    {
+      overflowType: "AGAINST",
+      params: web3.eth.abi.encodeParameters(['uint256', 'uint256'], [0, overflowWeight]),
+      // the contract will throw when it attempts to decode the params
+      revertError: 'Transaction reverted and Hardhat couldn\'t infer the reason.',
+    },
+    {
+      overflowType: "ABSTAIN",
+      params: web3.eth.abi.encodeParameters(['uint256', 'uint256'], [0, 0]),
+      // the contract will throw when it attempts to cast the weight
+      revertError: 'SafeCast: value doesn\'t fit in 128 bits',
+    },
+  ].forEach((test) => {
+    it(`Protects against fractional voting weight overflow - ${test.overflowType}`, async function () {
+      const voter1Weight = overflowWeight;
+      await this.token.transfer(voter1, voter1Weight.toString(), { from: owner });
+
+      // To test for overflow, we need a number of votes greater than the max we can store.
+      const maxStorableVoteCount = (new BN('2')).pow(new BN('128')).sub(new BN('1'));
+      assert(voter1Weight.gt(maxStorableVoteCount));
+
+      await this.helper.propose({ from: proposer });
+      await this.helper.waitForSnapshot();
+      expect(await this.mock.state(this.proposal.id)).to.be.bignumber.equal(Enums.ProposalState.Pending);
+
+      const initVotes = await this.mock.proposalVotes(this.proposal.id);
+      const thisValueIsIgnoredWhenUsingParams = Enums.VoteType.For;
+      await expectRevert(
+        this.helper.vote(
+          { support: thisValueIsIgnoredWhenUsingParams, params: test.params },
+          { from: voter1 }
+        ),
+        test.revertError
+      );
+
+      // The important thing is that the call reverts and no vote counts are changed
+      const currentVotes = await this.mock.proposalVotes(this.proposal.id);
+      expect(currentVotes.forVotes).to.be.bignumber.equal(initVotes.forVotes);
+      expect(currentVotes.againstVotes).to.be.bignumber.equal(initVotes.againstVotes);
+      expect(currentVotes.abstainVotes).to.be.bignumber.equal(initVotes.abstainVotes);
+    });
+  });
 });
