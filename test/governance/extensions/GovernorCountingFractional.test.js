@@ -1,21 +1,13 @@
 const { BN, expectEvent, expectRevert } = require('@openzeppelin/test-helpers');
 const { expect } = require('chai');
-const ethSigUtil = require('eth-sig-util');
-const Wallet = require('ethereumjs-wallet').default;
-const { fromRpcSig } = require('ethereumjs-util');
 const Enums = require('../../helpers/enums');
-const { EIP712Domain } = require('../../helpers/eip712');
 const { GovernorHelper } = require('../../helpers/governance');
 
-const {
-  shouldSupportInterfaces,
-} = require('../../utils/introspection/SupportsInterface.behavior');
+const { shouldSupportInterfaces } = require('../../utils/introspection/SupportsInterface.behavior');
 
 const Token = artifacts.require('ERC20VotesMock'); // we need a max supply > type(uint128).max
 const Governor = artifacts.require('GovernorFractionalMock');
 const CallReceiver = artifacts.require('CallReceiverMock');
-const ERC721Mock = artifacts.require('ERC721Mock');
-const ERC1155Mock = artifacts.require('ERC1155Mock');
 
 contract('GovernorCountingFractional', function (accounts) {
   const [owner, proposer, voter1, voter2, voter3, voter4] = accounts;
@@ -23,7 +15,7 @@ contract('GovernorCountingFractional', function (accounts) {
   const name = 'OZ-Governor';
   const tokenName = 'MockToken';
   const tokenSymbol = 'MTKN';
-  const tokenSupply = (new BN('2')).pow(new BN('224')).sub(new BN('10')); // nearly the max allowable
+  const tokenSupply = new BN('2').pow(new BN('224')).sub(new BN('10')); // nearly the max allowable
   const overflowWeight = new BN(web3.utils.toWei('350000000000000000000')); // > type(uint128).max
   const votingDelay = new BN(4);
   const votingPeriod = new BN(16);
@@ -42,13 +34,16 @@ contract('GovernorCountingFractional', function (accounts) {
     await this.helper.delegate({ token: this.token, to: voter3 });
     await this.helper.delegate({ token: this.token, to: voter4 });
 
-    this.proposal = this.helper.setProposal([
-      {
-        target: this.receiver.address,
-        data: this.receiver.contract.methods.mockFunction().encodeABI(),
-        value: 0,
-      },
-    ], '<proposal description>');
+    this.proposal = this.helper.setProposal(
+      [
+        {
+          target: this.receiver.address,
+          data: this.receiver.contract.methods.mockFunction().encodeABI(),
+          value: 0,
+        },
+      ],
+      '<proposal description>',
+    );
 
     expect(await this.mock.hasVoted(this.proposal.id, owner)).to.be.equal(false);
     expect(await this.mock.hasVoted(this.proposal.id, voter1)).to.be.equal(false);
@@ -57,7 +52,7 @@ contract('GovernorCountingFractional', function (accounts) {
     expect(await this.mock.hasVoted(this.proposal.id, voter4)).to.be.equal(false);
   });
 
-  shouldSupportInterfaces([ // TODO should it?
+  shouldSupportInterfaces([
     'ERC165',
     'ERC1155Receiver',
     'Governor',
@@ -91,21 +86,17 @@ contract('GovernorCountingFractional', function (accounts) {
     // Run proposal
     const txPropose = await this.helper.propose({ from: proposer });
 
-    expectEvent(
-      txPropose,
-      'ProposalCreated',
-      {
-        proposalId: this.proposal.id,
-        proposer,
-        targets: this.proposal.targets,
-        // values: this.proposal.values,
-        signatures: this.proposal.signatures,
-        calldatas: this.proposal.data,
-        startBlock: new BN(txPropose.receipt.blockNumber).add(votingDelay),
-        endBlock: new BN(txPropose.receipt.blockNumber).add(votingDelay).add(votingPeriod),
-        description: this.proposal.description,
-      },
-    );
+    expectEvent(txPropose, 'ProposalCreated', {
+      proposalId: this.proposal.id,
+      proposer,
+      targets: this.proposal.targets,
+      // values: this.proposal.values,
+      signatures: this.proposal.signatures,
+      calldatas: this.proposal.data,
+      startBlock: new BN(txPropose.receipt.blockNumber).add(votingDelay),
+      endBlock: new BN(txPropose.receipt.blockNumber).add(votingDelay).add(votingPeriod),
+      description: this.proposal.description,
+    });
 
     await this.helper.waitForSnapshot();
 
@@ -120,51 +111,31 @@ contract('GovernorCountingFractional', function (accounts) {
       },
     );
 
-    expectEvent(
-      await this.helper.vote({ support: Enums.VoteType.For }, { from: voter2 }),
-      'VoteCast',
-      {
-        voter: voter2,
-        support: Enums.VoteType.For,
-        weight: voter2Weight,
-      },
-    );
+    expectEvent(await this.helper.vote({ support: Enums.VoteType.For }, { from: voter2 }), 'VoteCast', {
+      voter: voter2,
+      support: Enums.VoteType.For,
+      weight: voter2Weight,
+    });
 
-    expectEvent(
-      await this.helper.vote({ support: Enums.VoteType.Against }, { from: voter3 }),
-      'VoteCast',
-      {
-        voter: voter3,
-        support: Enums.VoteType.Against,
-        weight: voter3Weight,
-      },
-    );
+    expectEvent(await this.helper.vote({ support: Enums.VoteType.Against }, { from: voter3 }), 'VoteCast', {
+      voter: voter3,
+      support: Enums.VoteType.Against,
+      weight: voter3Weight,
+    });
 
-    expectEvent(
-      await this.helper.vote({ support: Enums.VoteType.Abstain }, { from: voter4 }),
-      'VoteCast',
-      {
-        voter: voter4,
-        support: Enums.VoteType.Abstain,
-        weight: voter4Weight,
-      },
-    );
+    expectEvent(await this.helper.vote({ support: Enums.VoteType.Abstain }, { from: voter4 }), 'VoteCast', {
+      voter: voter4,
+      support: Enums.VoteType.Abstain,
+      weight: voter4Weight,
+    });
 
     await this.helper.waitForDeadline();
 
     const txExecute = await this.helper.execute();
 
-    expectEvent(
-      txExecute,
-      'ProposalExecuted',
-      { proposalId: this.proposal.id },
-    );
+    expectEvent(txExecute, 'ProposalExecuted', { proposalId: this.proposal.id });
 
-    await expectEvent.inTransaction(
-      txExecute.tx,
-      this.receiver,
-      'MockFunctionCalled',
-    );
+    await expectEvent.inTransaction(txExecute.tx, this.receiver, 'MockFunctionCalled');
 
     // After
     expect(await this.mock.hasVoted(this.proposal.id, owner)).to.be.equal(false);
@@ -285,7 +256,9 @@ contract('GovernorCountingFractional', function (accounts) {
 
     // voter 2 casts votes
     const voter2Params = web3.eth.abi.encodeParameters(['uint128', 'uint128'], [voter2ForVotes, voter2AgainstVotes]);
-    const voter2Tx = await this.mock.castVoteWithReasonAndParams(this.proposal.id, 0, '', voter2Params, { from: voter2 });
+    const voter2Tx = await this.mock.castVoteWithReasonAndParams(this.proposal.id, 0, '', voter2Params, {
+      from: voter2,
+    });
     expectEvent(voter2Tx, 'VoteCastWithParams', { voter: voter2, weight: voter2Weight, params: voter2Params });
     let votes = await this.mock.proposalVotes(this.proposal.id);
     expect(votes.forVotes).to.be.bignumber.equal(voter2ForVotes);
@@ -294,7 +267,9 @@ contract('GovernorCountingFractional', function (accounts) {
 
     // voter 2 casts votes
     const voter3Params = web3.eth.abi.encodeParameters(['uint128', 'uint128'], [voter3ForVotes, voter3AgainstVotes]);
-    const voter3Tx = await this.mock.castVoteWithReasonAndParams(this.proposal.id, 0, '', voter3Params, { from: voter3 });
+    const voter3Tx = await this.mock.castVoteWithReasonAndParams(this.proposal.id, 0, '', voter3Params, {
+      from: voter3,
+    });
     expectEvent(voter3Tx, 'VoteCastWithParams', { voter: voter3, weight: voter3Weight, params: voter3Params });
     votes = await this.mock.proposalVotes(this.proposal.id);
     expect(votes.forVotes).to.be.bignumber.equal(voter3ForVotes.add(voter2ForVotes));
@@ -385,9 +360,9 @@ contract('GovernorCountingFractional', function (accounts) {
   });
 
   [
-    { overflowType: "FOR", supportType: Enums.VoteType.For },
-    { overflowType: "AGAINST", supportType: Enums.VoteType.Against },
-    { overflowType: "ABSTAIN", supportType: Enums.VoteType.Abstain },
+    { overflowType: 'FOR', supportType: Enums.VoteType.For },
+    { overflowType: 'AGAINST', supportType: Enums.VoteType.Against },
+    { overflowType: 'ABSTAIN', supportType: Enums.VoteType.Abstain },
   ].forEach((test) => {
     it(`Protects against voting weight overflow - ${test.overflowType}`, async function () {
       const voter1Weight = overflowWeight.toString();
@@ -400,7 +375,7 @@ contract('GovernorCountingFractional', function (accounts) {
       const initVotes = await this.mock.proposalVotes(this.proposal.id);
       await expectRevert(
         this.helper.vote({ support: test.supportType }, { from: voter1 }),
-        'SafeCast: value doesn\'t fit in 128 bits'
+        'SafeCast: value doesn\'t fit in 128 bits',
       );
 
       // The important thing is that the call reverts and no vote counts are changed
@@ -413,19 +388,19 @@ contract('GovernorCountingFractional', function (accounts) {
 
   [
     {
-      overflowType: "FOR",
+      overflowType: 'FOR',
       params: web3.eth.abi.encodeParameters(['uint136', 'uint136'], [overflowWeight, 0]),
       // the contract will throw when it attempts to decode the params
       revertError: 'Transaction reverted and Hardhat couldn\'t infer the reason.',
     },
     {
-      overflowType: "AGAINST",
+      overflowType: 'AGAINST',
       params: web3.eth.abi.encodeParameters(['uint256', 'uint256'], [0, overflowWeight]),
       // the contract will throw when it attempts to decode the params
       revertError: 'Transaction reverted and Hardhat couldn\'t infer the reason.',
     },
     {
-      overflowType: "ABSTAIN",
+      overflowType: 'ABSTAIN',
       params: web3.eth.abi.encodeParameters(['uint256', 'uint256'], [0, 0]),
       // the contract will throw when it attempts to cast the weight
       revertError: 'SafeCast: value doesn\'t fit in 128 bits',
@@ -436,7 +411,7 @@ contract('GovernorCountingFractional', function (accounts) {
       await this.token.transfer(voter1, voter1Weight.toString(), { from: owner });
 
       // To test for overflow, we need a number of votes greater than the max we can store.
-      const maxStorableVoteCount = (new BN('2')).pow(new BN('128')).sub(new BN('1'));
+      const maxStorableVoteCount = new BN('2').pow(new BN('128')).sub(new BN('1'));
       assert(voter1Weight.gt(maxStorableVoteCount));
 
       await this.helper.propose({ from: proposer });
@@ -446,11 +421,8 @@ contract('GovernorCountingFractional', function (accounts) {
       const initVotes = await this.mock.proposalVotes(this.proposal.id);
       const thisValueIsIgnoredWhenUsingParams = Enums.VoteType.For;
       await expectRevert(
-        this.helper.vote(
-          { support: thisValueIsIgnoredWhenUsingParams, params: test.params },
-          { from: voter1 }
-        ),
-        test.revertError
+        this.helper.vote({ support: thisValueIsIgnoredWhenUsingParams, params: test.params }, { from: voter1 }),
+        test.revertError,
       );
 
       // The important thing is that the call reverts and no vote counts are changed
