@@ -6,7 +6,6 @@ import "../governance/extensions/GovernorCountingFractional.sol";
 import "../governance/extensions/GovernorVotes.sol";
 
 contract GovernorFractionalMock is GovernorVotes, GovernorCountingFractional {
-
     constructor(string memory name_, IVotes token_) Governor(name_) GovernorVotes(token_) {}
 
     function quorum(uint256) public pure override returns (uint256) {

@@ -91,10 +91,7 @@ abstract contract GovernorCountingFractional is Governor {
         uint256 weight,
         bytes memory params
     ) internal virtual override {
-        require(
-          !_proposalVotersHasVoted[proposalId][account],
-          "GovernorVotingSimple: vote already cast"
-        );
+        require(!_proposalVotersHasVoted[proposalId][account], "GovernorVotingSimple: vote already cast");
         _proposalVotersHasVoted[proposalId][account] = true;
 
         uint128 forVotes;
@@ -114,8 +111,8 @@ abstract contract GovernorCountingFractional is Governor {
         } else {
             (forVotes, againstVotes) = abi.decode(params, (uint128, uint128));
             require(
-              forVotes + againstVotes <= SafeCast.toUint128(weight),
-              "GovernorCountingFractional: Invalid Weight"
+                forVotes + againstVotes <= SafeCast.toUint128(weight),
+                "GovernorCountingFractional: Invalid Weight"
             );
             // prior require check ensures no overflow
             unchecked {
@@ -126,9 +123,9 @@ abstract contract GovernorCountingFractional is Governor {
         ProposalVote memory existingProposalVote = _proposalVotes[proposalId];
 
         ProposalVote memory _proposalvote = ProposalVote(
-          existingProposalVote.againstVotes + againstVotes,
-          existingProposalVote.forVotes + forVotes,
-          existingProposalVote.abstainVotes + abstainVotes
+            existingProposalVote.againstVotes + againstVotes,
+            existingProposalVote.forVotes + forVotes,
+            existingProposalVote.abstainVotes + abstainVotes
         );
 
         _proposalVotes[proposalId] = _proposalvote;
