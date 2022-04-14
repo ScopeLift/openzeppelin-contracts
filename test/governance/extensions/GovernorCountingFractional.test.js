@@ -66,7 +66,7 @@ contract('GovernorCountingFractional', function (accounts) {
     expect(await this.mock.token()).to.be.equal(this.token.address);
     expect(await this.mock.votingDelay()).to.be.bignumber.equal(votingDelay);
     expect(await this.mock.votingPeriod()).to.be.bignumber.equal(votingPeriod);
-    expect(await this.mock.quorum(0)).to.be.bignumber.equal('0');
+    expect(await this.mock.quorum(0)).to.be.bignumber.greaterThan('0');
     expect(await this.mock.COUNTING_MODE()).to.be.equal('support=bravo&quorum=for');
   });
 
@@ -148,6 +148,11 @@ contract('GovernorCountingFractional', function (accounts) {
     // balances shouldn't have changed
     expect(await web3.eth.getBalance(this.mock.address)).to.be.bignumber.equal(initGovBalance);
     expect(await web3.eth.getBalance(this.receiver.address)).to.be.bignumber.equal(initReceiverBalance);
+    // votes should have been tallied
+    const votes = await this.mock.proposalVotes(this.proposal.id);
+    expect(votes.forVotes).to.be.bignumber.equal(new BN(voter1Weight).add(new BN(voter2Weight)));
+    expect(votes.againstVotes).to.be.bignumber.equal(new BN(voter3Weight));
+    expect(votes.abstainVotes).to.be.bignumber.equal(new BN(voter4Weight));
   });
 
   it('Voting with fractionalized parameters is properly supported', async function () {
@@ -432,5 +437,98 @@ contract('GovernorCountingFractional', function (accounts) {
       expect(currentVotes.againstVotes).to.be.bignumber.equal(initVotes.againstVotes);
       expect(currentVotes.abstainVotes).to.be.bignumber.equal(initVotes.abstainVotes);
     });
+  });
+
+  it('Raises a helpful error and reverts if the params are too long or short', async function () {
+    const voter1Weight = web3.utils.toWei('40.0');
+    await this.token.transfer(voter1, voter1Weight, { from: owner });
+
+    await this.helper.propose({ from: proposer });
+    await this.helper.waitForSnapshot();
+    expect(await this.mock.state(this.proposal.id)).to.be.bignumber.equal(Enums.ProposalState.Pending);
+    const initVotes = await this.mock.proposalVotes(this.proposal.id);
+
+    const forVotes = new BN(voter1Weight).mul(new BN(98)).div(new BN(100)); // 98%
+    const againstVotes = new BN(voter1Weight).mul(new BN(1)).div(new BN(100)); // 1%
+
+    // add a byte
+    const params = encodePackedVotes({ forVotes, againstVotes });
+    const paramsBitAdded = params + '00';
+    const supportTypeIsIgnoredWhenUsingParams = Enums.VoteType.For;
+    await expectRevert(
+      this.helper.vote({ support: supportTypeIsIgnoredWhenUsingParams, params: paramsBitAdded }, { from: voter1 }),
+      'GovernorCountingFractional: invalid value for params',
+    );
+
+    // subtract a byte
+    const paramsBitMissing = params.substr(0, params.length - 2);
+    await expectRevert(
+      this.helper.vote({ support: supportTypeIsIgnoredWhenUsingParams, params: paramsBitMissing }, { from: voter1 }),
+      'GovernorCountingFractional: invalid value for params',
+    );
+
+    // The important thing is that the call reverts and no vote counts are changed
+    const currentVotes = await this.mock.proposalVotes(this.proposal.id);
+    expect(currentVotes.forVotes).to.be.bignumber.equal(initVotes.forVotes);
+    expect(currentVotes.againstVotes).to.be.bignumber.equal(initVotes.againstVotes);
+    expect(currentVotes.abstainVotes).to.be.bignumber.equal(initVotes.abstainVotes);
+  });
+
+  it('Quorum does not include ABSTAIN votes', async function () {
+    const quorum = await this.mock.quorum(0);
+    const forVotes = new BN(1);
+    const againstVotes = new BN(0);
+    // all other votes (a quorum's worth) will be counted as abstain
+    const voter1Weight = quorum.add(forVotes).toString();
+    await this.token.transfer(voter1, voter1Weight, { from: owner });
+
+    await this.helper.propose({ from: proposer });
+    await this.helper.waitForSnapshot();
+    expect(await this.mock.state(this.proposal.id)).to.be.bignumber.equal(Enums.ProposalState.Pending);
+
+    const params = encodePackedVotes({ forVotes, againstVotes });
+    const supportTypeIsIgnoredWhenUsingParams = Enums.VoteType.For;
+    await this.helper.vote({ support: supportTypeIsIgnoredWhenUsingParams, params: params }, { from: voter1 });
+
+    const votes = await this.mock.proposalVotes(this.proposal.id);
+    expect(votes.abstainVotes).to.be.bignumber.equal(quorum);
+    expect(votes.forVotes).to.be.bignumber.equal(forVotes);
+    expect(votes.againstVotes).to.be.bignumber.equal(againstVotes);
+
+    // close out the voting period
+    await this.helper.waitForDeadline(1); // one block after the proposal deadline
+
+    // If ABSTAIN were counted as part of quorum then the proposal would have succeeded,
+    // since forVotes > againstVotes. The fact that it is defeated means quorum was never reached.
+    expect(await this.mock.state(this.proposal.id)).to.be.bignumber.equal(Enums.ProposalState.Defeated);
+  });
+
+  it('Quorum does include FOR votes', async function () {
+    const quorum = await this.mock.quorum(0);
+    const voter1Weight = quorum.toString();
+    await this.token.transfer(voter1, voter1Weight, { from: owner });
+
+    await this.helper.propose({ from: proposer });
+    await this.helper.waitForSnapshot();
+    expect(await this.mock.state(this.proposal.id)).to.be.bignumber.equal(Enums.ProposalState.Pending);
+
+    const forVotes = quorum;
+    const againstVotes = new BN(0);
+    const abstainVotes = new BN(0);
+
+    const params = encodePackedVotes({ forVotes, againstVotes });
+    const supportTypeIsIgnoredWhenUsingParams = Enums.VoteType.For;
+    await this.helper.vote({ support: supportTypeIsIgnoredWhenUsingParams, params: params }, { from: voter1 });
+
+    const votes = await this.mock.proposalVotes(this.proposal.id);
+    expect(votes.forVotes).to.be.bignumber.equal(quorum);
+    expect(votes.againstVotes).to.be.bignumber.equal(againstVotes);
+    expect(votes.abstainVotes).to.be.bignumber.equal(abstainVotes);
+
+    // close out the voting period
+    await this.helper.waitForDeadline(1); // one block after the proposal deadline
+
+    // if ABSTAIN were counted as part of quorum then the proposal should have succeeded
+    expect(await this.mock.state(this.proposal.id)).to.be.bignumber.equal(Enums.ProposalState.Succeeded);
   });
 });

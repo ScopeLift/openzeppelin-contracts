@@ -69,7 +69,7 @@ abstract contract GovernorCountingFractional is Governor {
     function _quorumReached(uint256 proposalId) internal view virtual override returns (bool) {
         ProposalVote storage proposalvote = _proposalVotes[proposalId];
 
-        return quorum(proposalSnapshot(proposalId)) <= proposalvote.forVotes + proposalvote.abstainVotes;
+        return quorum(proposalSnapshot(proposalId)) <= proposalvote.forVotes;
     }
 
     /**
@@ -91,47 +91,68 @@ abstract contract GovernorCountingFractional is Governor {
         uint256 weight,
         bytes memory params
     ) internal virtual override {
-        require(!_proposalVotersHasVoted[proposalId][account], "GovernorVotingSimple: vote already cast");
+        require(!_proposalVotersHasVoted[proposalId][account], "GovernorCountingFractional: vote already cast");
         _proposalVotersHasVoted[proposalId][account] = true;
 
-        uint128 forVotes;
-        uint128 againstVotes;
-        uint128 abstainVotes;
-
         if (params.length == 0) {
-            if (support == uint8(VoteType.Against)) {
-                againstVotes = SafeCast.toUint128(weight);
-            } else if (support == uint8(VoteType.For)) {
-                forVotes = SafeCast.toUint128(weight);
-            } else if (support == uint8(VoteType.Abstain)) {
-                abstainVotes = SafeCast.toUint128(weight);
-            } else {
-                revert("GovernorCountingFractional: invalid value for enum VoteType");
-            }
+            _countVoteNominal(proposalId, support, weight);
         } else {
-            uint256 decoded = abi.decode(params, (uint256));
-            forVotes = SafeCast.toUint128(decoded >> 128); // keep left-most 128 bits
-            uint256 mask = 2**128 - 1; // 128 bits of 0's, 128 bits of 1's
-            againstVotes = SafeCast.toUint128(mask & decoded); // keep right-most 128 bits
+            _countVoteFractional(proposalId, weight, params);
+        }
+    }
 
-            require(
-                forVotes + againstVotes <= SafeCast.toUint128(weight),
-                "GovernorCountingFractional: Invalid Weight"
-            );
-            // prior require check ensures no overflow
-            unchecked {
-                abstainVotes = uint128(weight) - forVotes - againstVotes;
-            }
+    /**
+     * @dev Count votes with full weight
+     */
+    function _countVoteNominal(
+        uint256 proposalId,
+        uint8 support,
+        uint256 weight
+    ) internal {
+        ProposalVote memory _proposalVote = _proposalVotes[proposalId];
+
+        if (support == uint8(VoteType.Against)) {
+            _proposalVote.againstVotes += SafeCast.toUint128(weight);
+        } else if (support == uint8(VoteType.For)) {
+            _proposalVote.forVotes += SafeCast.toUint128(weight);
+        } else if (support == uint8(VoteType.Abstain)) {
+            _proposalVote.abstainVotes += SafeCast.toUint128(weight);
+        } else {
+            revert("GovernorCountingFractional: invalid value for enum VoteType");
+        }
+
+        _proposalVotes[proposalId] = _proposalVote;
+    }
+
+    /**
+     * @dev Count votes with fractional weight
+     */
+    function _countVoteFractional(
+        uint256 proposalId,
+        uint256 weight,
+        bytes memory voteData
+    ) internal {
+        require(voteData.length == 32, "GovernorCountingFractional: invalid value for params");
+
+        uint256 decoded = abi.decode(voteData, (uint256));
+        uint128 forVotes = uint128(decoded >> 128); // keep left-most 128 bits
+        uint256 mask = 0xffffffffffffffffffffffffffffffff; // 128 bits of 0's, 128 bits of 1's
+        uint128 againstVotes = uint128(mask & decoded); // keep right-most 128 bits
+
+        uint128 abstainVotes;
+        require(forVotes + againstVotes <= SafeCast.toUint128(weight), "GovernorCountingFractional: Invalid Weight");
+        // prior require check ensures no overflow
+        unchecked {
+            abstainVotes = uint128(weight) - forVotes - againstVotes;
         }
 
         ProposalVote memory existingProposalVote = _proposalVotes[proposalId];
-
-        ProposalVote memory _proposalvote = ProposalVote(
+        ProposalVote memory _proposalVote = ProposalVote(
             existingProposalVote.againstVotes + againstVotes,
             existingProposalVote.forVotes + forVotes,
             existingProposalVote.abstainVotes + abstainVotes
         );
 
-        _proposalVotes[proposalId] = _proposalvote;
+        _proposalVotes[proposalId] = _proposalVote;
     }
 }
