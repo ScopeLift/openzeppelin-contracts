@@ -109,20 +109,18 @@ abstract contract GovernorCountingFractional is Governor {
         uint8 support,
         uint256 weight
     ) internal {
-        ProposalVote memory _proposalVote = _proposalVotes[proposalId];
-
         if (support == uint8(VoteType.Against)) {
-            _proposalVote.againstVotes += SafeCast.toUint128(weight);
+            _proposalVotes[proposalId].againstVotes += SafeCast.toUint128(weight);
         } else if (support == uint8(VoteType.For)) {
-            _proposalVote.forVotes += SafeCast.toUint128(weight);
+            _proposalVotes[proposalId].forVotes += SafeCast.toUint128(weight);
         } else if (support == uint8(VoteType.Abstain)) {
-            _proposalVote.abstainVotes += SafeCast.toUint128(weight);
+            _proposalVotes[proposalId].abstainVotes += SafeCast.toUint128(weight);
         } else {
             revert("GovernorCountingFractional: invalid value for enum VoteType");
         }
-
-        _proposalVotes[proposalId] = _proposalVote;
     }
+
+    uint256 constant _VOTEMASK = 0xffffffffffffffffffffffffffffffff; // 128 bits of 0's, 128 bits of 1's
 
     /**
      * @dev Count votes with fractional weight
@@ -136,8 +134,7 @@ abstract contract GovernorCountingFractional is Governor {
 
         uint256 decoded = abi.decode(voteData, (uint256));
         uint128 forVotes = uint128(decoded >> 128); // keep left-most 128 bits
-        uint256 mask = 0xffffffffffffffffffffffffffffffff; // 128 bits of 0's, 128 bits of 1's
-        uint128 againstVotes = uint128(mask & decoded); // keep right-most 128 bits
+        uint128 againstVotes = uint128(_VOTEMASK & decoded); // keep right-most 128 bits
 
         uint128 abstainVotes;
         require(forVotes + againstVotes <= SafeCast.toUint128(weight), "GovernorCountingFractional: Invalid Weight");
