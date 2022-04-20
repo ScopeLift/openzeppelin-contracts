@@ -83,6 +83,7 @@ abstract contract GovernorCountingFractional is Governor {
 
     /**
      * @dev See {Governor-_countVote}. In this module, the support follows the `VoteType` enum (from Governor Bravo).
+     * TODO: Add note for how params is used
      */
     function _countVote(
         uint256 proposalId,
@@ -116,7 +117,7 @@ abstract contract GovernorCountingFractional is Governor {
         } else if (support == uint8(VoteType.Abstain)) {
             _proposalVotes[proposalId].abstainVotes += SafeCast.toUint128(weight);
         } else {
-            revert("GovernorCountingFractional: invalid value for enum VoteType");
+            revert("GovernorCountingFractional: invalid support value, must be included in VoteType enum");
         }
     }
 
@@ -136,9 +137,9 @@ abstract contract GovernorCountingFractional is Governor {
         uint128 forVotes = uint128(decoded >> 128); // keep left-most 128 bits
         uint128 againstVotes = uint128(_VOTEMASK & decoded); // keep right-most 128 bits
 
-        uint128 abstainVotes;
-        require(forVotes + againstVotes <= SafeCast.toUint128(weight), "GovernorCountingFractional: Invalid Weight");
+        require(forVotes + againstVotes <= SafeCast.toUint128(weight), "GovernorCountingFractional: invalid weight");
         // prior require check ensures no overflow
+        uint128 abstainVotes;
         unchecked {
             abstainVotes = uint128(weight) - forVotes - againstVotes;
         }
