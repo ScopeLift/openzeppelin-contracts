@@ -362,7 +362,7 @@ contract('GovernorCountingFractional', function (accounts) {
     const params = encodePackedVotes({ forVotes, againstVotes });
     await expectRevert(
       this.helper.vote({ support: Enums.VoteType.For, params }, { from: voter2 }),
-      'GovernorCountingFractional: Invalid Weight',
+      'GovernorCountingFractional: invalid weight',
     );
   });
 
