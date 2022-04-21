@@ -453,17 +453,17 @@ contract('GovernorCountingFractional', function (accounts) {
 
     // add a byte
     const params = encodePackedVotes({ forVotes, againstVotes });
-    const paramsBitAdded = params + '00';
+    const paramsByteAdded = params + '00';
     const supportTypeIsIgnoredWhenUsingParams = Enums.VoteType.For;
     await expectRevert(
-      this.helper.vote({ support: supportTypeIsIgnoredWhenUsingParams, params: paramsBitAdded }, { from: voter1 }),
+      this.helper.vote({ support: supportTypeIsIgnoredWhenUsingParams, params: paramsByteAdded }, { from: voter1 }),
       'GovernorCountingFractional: invalid value for params',
     );
 
     // subtract a byte
-    const paramsBitMissing = params.substr(0, params.length - 2);
+    const paramsByteMissing = params.substr(0, params.length - 2);
     await expectRevert(
-      this.helper.vote({ support: supportTypeIsIgnoredWhenUsingParams, params: paramsBitMissing }, { from: voter1 }),
+      this.helper.vote({ support: supportTypeIsIgnoredWhenUsingParams, params: paramsByteMissing }, { from: voter1 }),
       'GovernorCountingFractional: invalid value for params',
     );
 
