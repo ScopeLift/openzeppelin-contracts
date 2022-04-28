@@ -121,8 +121,6 @@ abstract contract GovernorCountingFractional is Governor {
         }
     }
 
-    uint256 constant _VOTEMASK = 0xffffffffffffffffffffffffffffffff; // 128 bits of 0's, 128 bits of 1's
-
     /**
      * @dev Count votes with fractional weight
      */
@@ -135,12 +133,15 @@ abstract contract GovernorCountingFractional is Governor {
 
         uint256 decoded = abi.decode(voteData, (uint256));
         uint128 forVotes = uint128(decoded >> 128); // keep left-most 128 bits
-        uint128 againstVotes = uint128(_VOTEMASK & decoded); // keep right-most 128 bits
+        uint128 againstVotes = uint128(decoded); // keep right-most 128 bits
 
-        require(forVotes + againstVotes <= SafeCast.toUint128(weight), "GovernorCountingFractional: invalid weight");
-        // prior require check ensures no overflow
         uint128 abstainVotes;
         unchecked {
+            require(
+                uint256(forVotes) + againstVotes <= SafeCast.toUint128(weight),
+                "GovernorCountingFractional: invalid weight"
+            );
+            // above require check ensures no overflow
             abstainVotes = uint128(weight) - forVotes - againstVotes;
         }
 

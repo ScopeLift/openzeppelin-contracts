@@ -272,7 +272,7 @@ contract('GovernorCountingFractional', function (accounts) {
     expect(votes.againstVotes).to.be.bignumber.equal(new BN(voter1Weight).add(voter2AgainstVotes));
     expect(votes.abstainVotes).to.be.bignumber.equal(voter2AbstainVotes);
 
-    // voter 2 casts votes
+    // voter 3 casts votes
     const voter3Params = encodePackedVotes({ forVotes: voter3ForVotes, againstVotes: voter3AgainstVotes });
     const voter3Tx = await this.mock.castVoteWithReasonAndParams(this.proposal.id, 0, '', voter3Params, {
       from: voter3,
