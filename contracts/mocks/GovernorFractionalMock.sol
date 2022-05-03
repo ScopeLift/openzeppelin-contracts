@@ -9,7 +9,7 @@ contract GovernorFractionalMock is GovernorVotes, GovernorCountingFractional {
     constructor(string memory name_, IVotes token_) Governor(name_) GovernorVotes(token_) {}
 
     function quorum(uint256) public pure override returns (uint256) {
-        return 10e18; // 10 ether
+        return 10 ether;
     }
 
     function votingDelay() public pure override returns (uint256) {

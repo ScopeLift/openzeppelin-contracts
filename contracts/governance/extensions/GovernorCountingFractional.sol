@@ -73,7 +73,7 @@ abstract contract GovernorCountingFractional is Governor {
     }
 
     /**
-     * @dev See {Governor-_voteSucceeded}. In this module, the forVotes must be strictly over the againstVotes.
+     * @dev See {Governor-_voteSucceeded}. In this module, forVotes must be > againstVotes.
      */
     function _voteSucceeded(uint256 proposalId) internal view virtual override returns (bool) {
         ProposalVote storage proposalvote = _proposalVotes[proposalId];
