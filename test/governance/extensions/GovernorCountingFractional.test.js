@@ -67,7 +67,7 @@ contract('GovernorCountingFractional', function (accounts) {
     expect(await this.mock.votingDelay()).to.be.bignumber.equal(votingDelay);
     expect(await this.mock.votingPeriod()).to.be.bignumber.equal(votingPeriod);
     expect(await this.mock.quorum(0)).to.be.bignumber.greaterThan('0');
-    expect(await this.mock.COUNTING_MODE()).to.be.equal('support=bravo&quorum=for');
+    expect(await this.mock.COUNTING_MODE()).to.be.equal('support=bravo&quorum=bravo&params=fractional');
   });
 
   it('nominal is unaffected', async function () {
