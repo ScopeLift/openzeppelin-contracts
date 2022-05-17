@@ -24,6 +24,7 @@ contract('GovernorCountingFractional', function (accounts) {
     return web3.utils.encodePacked(
       { value: votes.forVotes, type: 'uint128' },
       { value: votes.againstVotes, type: 'uint128' },
+      { value: votes.abstainVotes, type: 'uint128' },
     );
   };
 
@@ -172,7 +173,7 @@ contract('GovernorCountingFractional', function (accounts) {
     const abstainVotes = new BN(voter2Weight).sub(forVotes).sub(againstVotes);
 
     // cast fractional votes
-    const params = encodePackedVotes({ forVotes, againstVotes });
+    const params = encodePackedVotes({ forVotes, againstVotes, abstainVotes });
     const tx = await this.mock.castVoteWithReasonAndParams(this.proposal.id, 0, '', params, { from: voter2 });
 
     expectEvent(tx, 'VoteCastWithParams', { voter: voter2, weight: voter2Weight, params });
@@ -200,7 +201,7 @@ contract('GovernorCountingFractional', function (accounts) {
     const abstainVotes = new BN(voter2Weight);
 
     // cast fractional votes
-    const params = encodePackedVotes({ forVotes, againstVotes });
+    const params = encodePackedVotes({ forVotes, againstVotes, abstainVotes });
     const tx = await this.mock.castVoteWithReasonAndParams(this.proposal.id, 0, '', params, { from: voter2 });
 
     expectEvent(tx, 'VoteCastWithParams', { voter: voter2, weight: voter2Weight, params });
@@ -228,7 +229,7 @@ contract('GovernorCountingFractional', function (accounts) {
     const abstainVotes = new BN(0);
 
     // cast fractional votes
-    const params = encodePackedVotes({ forVotes, againstVotes });
+    const params = encodePackedVotes({ forVotes, againstVotes, abstainVotes });
     const tx = await this.mock.castVoteWithReasonAndParams(this.proposal.id, 0, '', params, { from: voter2 });
 
     expectEvent(tx, 'VoteCastWithParams', { voter: voter2, weight: voter2Weight, params });
@@ -262,7 +263,11 @@ contract('GovernorCountingFractional', function (accounts) {
     const voter3AbstainVotes = new BN(voter3Weight).sub(voter3ForVotes).sub(voter3AgainstVotes);
 
     // voter 2 casts votes
-    const voter2Params = encodePackedVotes({ forVotes: voter2ForVotes, againstVotes: voter2AgainstVotes });
+    const voter2Params = encodePackedVotes({
+      forVotes: voter2ForVotes,
+      againstVotes: voter2AgainstVotes,
+      abstainVotes: voter2AbstainVotes
+    });
     const voter2Tx = await this.mock.castVoteWithReasonAndParams(this.proposal.id, 0, '', voter2Params, {
       from: voter2,
     });
@@ -273,7 +278,11 @@ contract('GovernorCountingFractional', function (accounts) {
     expect(votes.abstainVotes).to.be.bignumber.equal(voter2AbstainVotes);
 
     // voter 3 casts votes
-    const voter3Params = encodePackedVotes({ forVotes: voter3ForVotes, againstVotes: voter3AgainstVotes });
+    const voter3Params = encodePackedVotes({
+      forVotes: voter3ForVotes,
+      againstVotes: voter3AgainstVotes,
+      abstainVotes: voter3AbstainVotes
+    });
     const voter3Tx = await this.mock.castVoteWithReasonAndParams(this.proposal.id, 0, '', voter3Params, {
       from: voter3,
     });
@@ -300,8 +309,9 @@ contract('GovernorCountingFractional', function (accounts) {
 
     const forVotes = new BN(voter2Weight).mul(new BN(98)).div(new BN(100)); // 98%
     const againstVotes = new BN(voter2Weight).mul(new BN(1)).div(new BN(100)); // 1%
+    const abstainVotes = new BN(voter2Weight).sub(forVotes).sub(againstVotes);
 
-    const params = encodePackedVotes({ forVotes, againstVotes });
+    const params = encodePackedVotes({ forVotes, againstVotes, abstainVotes });
     const tx = await this.mock.castVoteWithReasonAndParams(this.proposal.id, 0, '', params, { from: voter2 });
     expectEvent(tx, 'VoteCastWithParams', { voter: voter2, weight: voter2Weight, params });
 
@@ -329,8 +339,9 @@ contract('GovernorCountingFractional', function (accounts) {
 
     const forVotes = new BN(voter2Weight).mul(new BN(1)).div(new BN(100)); // 1%
     const againstVotes = new BN(voter2Weight).mul(new BN(90)).div(new BN(100)); // 90%
+    const abstainVotes = new BN(voter2Weight).sub(forVotes).sub(againstVotes);
 
-    const params = encodePackedVotes({ forVotes, againstVotes });
+    const params = encodePackedVotes({ forVotes, againstVotes, abstainVotes });
     // the support type doesn't matter, specifically choosing FOR to demonstrate this
     const tx = await this.helper.vote({ support: Enums.VoteType.For, params }, { from: voter2 });
     expectEvent(tx, 'VoteCastWithParams', { voter: voter2, weight: voter2Weight, params });
@@ -357,12 +368,16 @@ contract('GovernorCountingFractional', function (accounts) {
 
     const forVotes = new BN(voter2Weight).mul(new BN(56)).div(new BN(100)); // 56%
     const againstVotes = new BN(voter2Weight).mul(new BN(90)).div(new BN(100)); // 90%
-    assert(forVotes.add(againstVotes).gt(new BN(voter2Weight)), 'test assumption not met');
+    const abstainVotes = new BN(voter2Weight).mul(new BN(11)).div(new BN(100)); // 11%
+    assert(
+      forVotes.add(againstVotes).add(abstainVotes).gt(new BN(voter2Weight)),
+      'test assumption not met'
+    );
 
-    const params = encodePackedVotes({ forVotes, againstVotes });
+    const params = encodePackedVotes({ forVotes, againstVotes, abstainVotes });
     await expectRevert(
       this.helper.vote({ support: Enums.VoteType.For, params }, { from: voter2 }),
-      'GovernorCountingFractional: invalid weight',
+      "GovernorCountingFractional: votes exceed weight"
     );
   });
 
@@ -396,20 +411,35 @@ contract('GovernorCountingFractional', function (accounts) {
   [
     {
       overflowType: 'FOR',
-      params: web3.utils.encodePacked({
-        // shift the bits left by 127, shifting by 128 will overflow -- as expected
-        value: overflowWeight.mul(new BN(2).pow(new BN(127))),
-        type: 'uint256',
-      }),
+      params: web3.utils.encodePacked(
+        { value: overflowWeight, type: 'uint256'},
+        { value: 0, type: 'uint128' },
+        { value: 0, type: 'uint128' },
+      ),
     },
     {
       overflowType: 'AGAINST',
-      // encoding as uint256 will zero pad to the left: which is what we want
-      params: web3.utils.encodePacked({ value: overflowWeight, type: 'uint256' }),
+      params: web3.utils.encodePacked(
+        { value: 0, type: 'uint128' },
+        { value: overflowWeight, type: 'uint256'},
+        { value: 0, type: 'uint128' },
+      ),
     },
     {
       overflowType: 'ABSTAIN',
-      params: web3.utils.encodePacked({ value: 0, type: 'uint256' }),
+      params: web3.utils.encodePacked(
+        { value: 0, type: 'uint128' },
+        { value: 0, type: 'uint128' },
+        { value: overflowWeight, type: 'uint256'},
+      ),
+    },
+    {
+      overflowType: 'ALL',
+      params: web3.utils.encodePacked(
+        { value: overflowWeight, type: 'uint256'},
+        { value: overflowWeight, type: 'uint256'},
+        { value: overflowWeight, type: 'uint256'},
+      ),
     },
   ].forEach((test) => {
     it(`Protects against fractional voting weight overflow - ${test.overflowType}`, async function () {
@@ -428,7 +458,7 @@ contract('GovernorCountingFractional', function (accounts) {
       const thisValueIsIgnoredWhenUsingParams = Enums.VoteType.For;
       await expectRevert(
         this.helper.vote({ support: thisValueIsIgnoredWhenUsingParams, params: test.params }, { from: voter1 }),
-        'SafeCast: value doesn\'t fit in 128 bits',
+        "GovernorCountingFractional: invalid voteData"
       );
 
       // The important thing is that the call reverts and no vote counts are changed
@@ -450,21 +480,22 @@ contract('GovernorCountingFractional', function (accounts) {
 
     const forVotes = new BN(voter1Weight).mul(new BN(98)).div(new BN(100)); // 98%
     const againstVotes = new BN(voter1Weight).mul(new BN(1)).div(new BN(100)); // 1%
+    const abstainVotes = new BN(0);
 
     // add a byte
-    const params = encodePackedVotes({ forVotes, againstVotes });
+    const params = encodePackedVotes({ forVotes, againstVotes, abstainVotes });
     const paramsByteAdded = params + '00';
     const supportTypeIsIgnoredWhenUsingParams = Enums.VoteType.For;
     await expectRevert(
       this.helper.vote({ support: supportTypeIsIgnoredWhenUsingParams, params: paramsByteAdded }, { from: voter1 }),
-      'GovernorCountingFractional: invalid value for params',
+      'GovernorCountingFractional: invalid voteData',
     );
 
     // subtract a byte
     const paramsByteMissing = params.substr(0, params.length - 2);
     await expectRevert(
       this.helper.vote({ support: supportTypeIsIgnoredWhenUsingParams, params: paramsByteMissing }, { from: voter1 }),
-      'GovernorCountingFractional: invalid value for params',
+      'GovernorCountingFractional: invalid voteData',
     );
 
     // The important thing is that the call reverts and no vote counts are changed
@@ -478,15 +509,16 @@ contract('GovernorCountingFractional', function (accounts) {
     const quorum = await this.mock.quorum(0);
     const forVotes = new BN(1);
     const againstVotes = new BN(0);
-    // all other votes (a quorum's worth) will be counted as abstain
     const voter1Weight = quorum.add(forVotes).toString();
+    const abstainVotes = new BN(voter1Weight).sub(forVotes).sub(againstVotes);
+
     await this.token.transfer(voter1, voter1Weight, { from: owner });
 
     await this.helper.propose({ from: proposer });
     await this.helper.waitForSnapshot();
     expect(await this.mock.state(this.proposal.id)).to.be.bignumber.equal(Enums.ProposalState.Pending);
 
-    const params = encodePackedVotes({ forVotes, againstVotes });
+    const params = encodePackedVotes({ forVotes, againstVotes, abstainVotes });
     const supportTypeIsIgnoredWhenUsingParams = Enums.VoteType.For;
     await this.helper.vote({ support: supportTypeIsIgnoredWhenUsingParams, params: params }, { from: voter1 });
 
@@ -516,7 +548,7 @@ contract('GovernorCountingFractional', function (accounts) {
     const againstVotes = new BN(0);
     const abstainVotes = new BN(0);
 
-    const params = encodePackedVotes({ forVotes, againstVotes });
+    const params = encodePackedVotes({ forVotes, againstVotes, abstainVotes });
     const supportTypeIsIgnoredWhenUsingParams = Enums.VoteType.For;
     await this.helper.vote({ support: supportTypeIsIgnoredWhenUsingParams, params: params }, { from: voter1 });
 

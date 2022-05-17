@@ -90,15 +90,19 @@ abstract contract GovernorCountingFractional is Governor {
         address account,
         uint8 support,
         uint256 weight,
-        bytes memory params
+        bytes memory voteData
     ) internal virtual override {
         require(!_proposalVotersHasVoted[proposalId][account], "GovernorCountingFractional: vote already cast");
         _proposalVotersHasVoted[proposalId][account] = true;
 
-        if (params.length == 0) {
+        if (voteData.length == 0) {
             _countVoteNominal(proposalId, support, weight);
         } else {
-            _countVoteFractional(proposalId, weight, params);
+            // TODO is there a better way to do this?
+            // We call this function as if it were an external call so that voteData
+            // becomes callData, which allows us to extract the bytes we want with array
+            // slicing.
+            this._countVoteFractional(proposalId, weight, voteData);
         }
     }
 
@@ -122,28 +126,26 @@ abstract contract GovernorCountingFractional is Governor {
     }
 
     /**
-     * @dev Count votes with fractional weight
+     * @dev Count votes with fractional weight.
+     *
+     * We expect `voteData` to be three packed uint128s, i.e. encodePacked(forVotes, againstVotes, abstainVotes)
      */
     function _countVoteFractional(
         uint256 proposalId,
         uint256 weight,
-        bytes memory voteData
-    ) internal {
-        require(voteData.length == 32, "GovernorCountingFractional: invalid value for params");
+        bytes calldata voteData
+    ) external {
+        if (msg.sender != address(this)) revert("unauthorized");
+        require(voteData.length == 48, "GovernorCountingFractional: invalid voteData");
 
-        uint256 decoded = abi.decode(voteData, (uint256));
-        uint128 forVotes = uint128(decoded >> 128); // keep left-most 128 bits
-        uint128 againstVotes = uint128(decoded); // keep right-most 128 bits
+        uint128 forVotes= uint128(bytes16(voteData[:16])); // left-most 16 bytes
+        uint128 againstVotes= uint128(bytes16(voteData[16:32])); // middle 16 bytes
+        uint128 abstainVotes= uint128(bytes16(voteData[32:48])); // right-most 16 bytes
 
-        uint128 abstainVotes;
-        unchecked {
-            require(
-                uint256(forVotes) + againstVotes <= SafeCast.toUint128(weight),
-                "GovernorCountingFractional: invalid weight"
-            );
-            // above require check ensures no overflow
-            abstainVotes = uint128(weight) - forVotes - againstVotes;
-        }
+        require(
+          uint256(forVotes) + againstVotes + abstainVotes <= uint128(weight),
+          "GovernorCountingFractional: votes exceed weight"
+        );
 
         ProposalVote memory existingProposalVote = _proposalVotes[proposalId];
         ProposalVote memory _proposalVote = ProposalVote(
