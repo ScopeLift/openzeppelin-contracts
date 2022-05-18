@@ -28,6 +28,11 @@ contract('GovernorCountingFractional', function (accounts) {
     );
   };
 
+  // (percent: number, voteWeight: string): BN
+  const percentOfVoteWeight = (percent, voteWeight) => {
+    return new BN(voteWeight).mul(new BN(percent)).div(new BN(100));
+  };
+
   beforeEach(async function () {
     this.chainId = await web3.eth.getChainId();
     this.owner = owner;
@@ -168,9 +173,9 @@ contract('GovernorCountingFractional', function (accounts) {
     await this.helper.vote({ support: Enums.VoteType.Against }, { from: voter1 });
     expect(await this.mock.state(this.proposal.id)).to.be.bignumber.equal(Enums.ProposalState.Active);
 
-    const forVotes = new BN(voter2Weight).mul(new BN(70)).div(new BN(100)); // 70 percent For
-    const againstVotes = new BN(voter2Weight).mul(new BN(20)).div(new BN(100)); // 20 percent Against
-    const abstainVotes = new BN(voter2Weight).sub(forVotes).sub(againstVotes);
+    const forVotes = percentOfVoteWeight(70, voter2Weight);
+    const againstVotes = percentOfVoteWeight(20, voter2Weight);
+    const abstainVotes = percentOfVoteWeight(10, voter2Weight);
 
     // cast fractional votes
     const params = encodePackedVotes({ forVotes, againstVotes, abstainVotes });
@@ -254,13 +259,13 @@ contract('GovernorCountingFractional', function (accounts) {
     await this.helper.vote({ support: Enums.VoteType.Against }, { from: voter1 });
     expect(await this.mock.state(this.proposal.id)).to.be.bignumber.equal(Enums.ProposalState.Active);
 
-    const voter2ForVotes = new BN(voter2Weight).mul(new BN(70)).div(new BN(100)); // 70%
-    const voter2AgainstVotes = new BN(voter2Weight).mul(new BN(20)).div(new BN(100)); // 20%
-    const voter2AbstainVotes = new BN(voter2Weight).sub(voter2ForVotes).sub(voter2AgainstVotes);
+    const voter2ForVotes = percentOfVoteWeight(70, voter2Weight);
+    const voter2AgainstVotes = percentOfVoteWeight(20, voter2Weight);
+    const voter2AbstainVotes = percentOfVoteWeight(10, voter2Weight);
 
-    const voter3ForVotes = new BN(voter3Weight).mul(new BN(15)).div(new BN(100)); // 15%
-    const voter3AgainstVotes = new BN(voter3Weight).mul(new BN(80)).div(new BN(100)); // 80%
-    const voter3AbstainVotes = new BN(voter3Weight).sub(voter3ForVotes).sub(voter3AgainstVotes);
+    const voter3ForVotes = percentOfVoteWeight(15, voter3Weight);
+    const voter3AgainstVotes = percentOfVoteWeight(80, voter3Weight);
+    const voter3AbstainVotes = percentOfVoteWeight(5, voter3Weight);
 
     // voter 2 casts votes
     const voter2Params = encodePackedVotes({
@@ -307,9 +312,9 @@ contract('GovernorCountingFractional', function (accounts) {
     await this.helper.vote({ support: Enums.VoteType.Against }, { from: voter1 });
     expect(await this.mock.state(this.proposal.id)).to.be.bignumber.equal(Enums.ProposalState.Active);
 
-    const forVotes = new BN(voter2Weight).mul(new BN(98)).div(new BN(100)); // 98%
-    const againstVotes = new BN(voter2Weight).mul(new BN(1)).div(new BN(100)); // 1%
-    const abstainVotes = new BN(voter2Weight).sub(forVotes).sub(againstVotes);
+    const forVotes = percentOfVoteWeight(98, voter2Weight);
+    const againstVotes = percentOfVoteWeight(1, voter2Weight);
+    const abstainVotes = percentOfVoteWeight(1, voter2Weight);
 
     const params = encodePackedVotes({ forVotes, againstVotes, abstainVotes });
     const tx = await this.mock.castVoteWithReasonAndParams(this.proposal.id, 0, '', params, { from: voter2 });
@@ -337,9 +342,9 @@ contract('GovernorCountingFractional', function (accounts) {
     await this.helper.vote({ support: Enums.VoteType.For }, { from: voter1 });
     expect(await this.mock.state(this.proposal.id)).to.be.bignumber.equal(Enums.ProposalState.Active);
 
-    const forVotes = new BN(voter2Weight).mul(new BN(1)).div(new BN(100)); // 1%
-    const againstVotes = new BN(voter2Weight).mul(new BN(90)).div(new BN(100)); // 90%
-    const abstainVotes = new BN(voter2Weight).sub(forVotes).sub(againstVotes);
+    const forVotes = percentOfVoteWeight(1, voter2Weight);
+    const againstVotes = percentOfVoteWeight(90, voter2Weight);
+    const abstainVotes = percentOfVoteWeight(1, voter2Weight);
 
     const params = encodePackedVotes({ forVotes, againstVotes, abstainVotes });
     // the support type doesn't matter, specifically choosing FOR to demonstrate this
@@ -366,9 +371,10 @@ contract('GovernorCountingFractional', function (accounts) {
     await this.helper.vote({ support: Enums.VoteType.For }, { from: voter1 });
     expect(await this.mock.state(this.proposal.id)).to.be.bignumber.equal(Enums.ProposalState.Active);
 
-    const forVotes = new BN(voter2Weight).mul(new BN(56)).div(new BN(100)); // 56%
-    const againstVotes = new BN(voter2Weight).mul(new BN(90)).div(new BN(100)); // 90%
-    const abstainVotes = new BN(voter2Weight).mul(new BN(11)).div(new BN(100)); // 11%
+    const forVotes = percentOfVoteWeight(56, voter2Weight);
+    const againstVotes = percentOfVoteWeight(90, voter2Weight);
+    const abstainVotes = percentOfVoteWeight(11, voter2Weight);
+
     assert(
       forVotes.add(againstVotes).add(abstainVotes).gt(new BN(voter2Weight)),
       'test assumption not met'
@@ -478,9 +484,9 @@ contract('GovernorCountingFractional', function (accounts) {
     expect(await this.mock.state(this.proposal.id)).to.be.bignumber.equal(Enums.ProposalState.Pending);
     const initVotes = await this.mock.proposalVotes(this.proposal.id);
 
-    const forVotes = new BN(voter1Weight).mul(new BN(98)).div(new BN(100)); // 98%
-    const againstVotes = new BN(voter1Weight).mul(new BN(1)).div(new BN(100)); // 1%
-    const abstainVotes = new BN(0);
+    const forVotes = percentOfVoteWeight(92, voter1Weight);
+    const againstVotes = percentOfVoteWeight(6, voter1Weight);
+    const abstainVotes = percentOfVoteWeight(2, voter1Weight);
 
     // add a byte
     const params = encodePackedVotes({ forVotes, againstVotes, abstainVotes });
@@ -572,11 +578,11 @@ contract('GovernorCountingFractional', function (accounts) {
     await this.helper.propose({ from: proposer });
     await this.helper.waitForSnapshot();
 
-    const forVotes = new BN(0);
-    const againstVotes = new BN(0);
     // for some reason, the person only wants to cast 89% of their vote weight, and does
     // so as an ABSTAIN
-    const abstainVotes = new BN(voter1Weight).mul(new BN(89)).div(new BN(100));
+    const forVotes = percentOfVoteWeight(0, voter1Weight);
+    const againstVotes = percentOfVoteWeight(0, voter1Weight);
+    const abstainVotes = percentOfVoteWeight(89, voter1Weight);
 
     // cast fractional votes
     const params = encodePackedVotes({ forVotes, againstVotes, abstainVotes });
