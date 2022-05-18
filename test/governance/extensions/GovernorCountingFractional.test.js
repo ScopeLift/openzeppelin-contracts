@@ -563,4 +563,30 @@ contract('GovernorCountingFractional', function (accounts) {
     // if ABSTAIN were counted as part of quorum then the proposal should have succeeded
     expect(await this.mock.state(this.proposal.id)).to.be.bignumber.equal(Enums.ProposalState.Succeeded);
   });
+
+  it('Fractional voting differentiates between Abstain votes and non-votes', async function () {
+    // fund the voters' accounts
+    const voter1Weight = web3.utils.toWei('42');
+    await this.token.transfer(voter1, voter1Weight, { from: owner });
+
+    await this.helper.propose({ from: proposer });
+    await this.helper.waitForSnapshot();
+
+    const forVotes = new BN(0);
+    const againstVotes = new BN(0);
+    // for some reason, the person only wants to cast 89% of their vote weight, and does
+    // so as an ABSTAIN
+    const abstainVotes = new BN(voter1Weight).mul(new BN(89)).div(new BN(100));
+
+    // cast fractional votes
+    const params = encodePackedVotes({ forVotes, againstVotes, abstainVotes });
+    const tx = await this.mock.castVoteWithReasonAndParams(this.proposal.id, 0, '', params, { from: voter1 });
+
+    const votes = await this.mock.proposalVotes(this.proposal.id);
+    expect(votes.forVotes).to.be.bignumber.equal(forVotes);
+    expect(votes.againstVotes).to.be.bignumber.equal(againstVotes);
+    expect(votes.abstainVotes).to.be.bignumber.equal(abstainVotes);
+
+    expect(votes.abstainVotes).to.be.bignumber.lt(new BN(voter1Weight));
+  });
 });
