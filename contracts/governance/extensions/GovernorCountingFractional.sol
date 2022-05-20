@@ -98,11 +98,7 @@ abstract contract GovernorCountingFractional is Governor {
         if (voteData.length == 0) {
             _countVoteNominal(proposalId, support, weight);
         } else {
-            // TODO is there a better way to do this?
-            // We call this function as if it were an external call so that voteData
-            // becomes callData, which allows us to extract the bytes we want with array
-            // slicing.
-            this._countVoteFractional(proposalId, weight, voteData);
+            _countVoteFractional(proposalId, weight, voteData);
         }
     }
 
@@ -133,18 +129,15 @@ abstract contract GovernorCountingFractional is Governor {
     function _countVoteFractional(
         uint256 proposalId,
         uint256 weight,
-        bytes calldata voteData
-    ) external {
-        if (msg.sender != address(this)) revert("unauthorized");
+        bytes memory voteData
+    ) internal {
         require(voteData.length == 48, "GovernorCountingFractional: invalid voteData");
 
-        uint128 forVotes= uint128(bytes16(voteData[:16])); // left-most 16 bytes
-        uint128 againstVotes= uint128(bytes16(voteData[16:32])); // middle 16 bytes
-        uint128 abstainVotes= uint128(bytes16(voteData[32:48])); // right-most 16 bytes
+        (uint128 forVotes, uint128 againstVotes, uint128 abstainVotes) = _decodePackedVotes(voteData);
 
         require(
-          uint256(forVotes) + againstVotes + abstainVotes <= uint128(weight),
-          "GovernorCountingFractional: votes exceed weight"
+            uint256(forVotes) + againstVotes + abstainVotes <= uint128(weight),
+            "GovernorCountingFractional: votes exceed weight"
         );
 
         ProposalVote memory existingProposalVote = _proposalVotes[proposalId];
@@ -155,5 +148,27 @@ abstract contract GovernorCountingFractional is Governor {
         );
 
         _proposalVotes[proposalId] = _proposalVote;
+    }
+
+    uint256 constant internal _VOTEMASK = 0xffffffffffffffffffffffffffffffff; // 128 bits of 0's, 128 bits of 1's
+
+    /**
+     * @dev Decodes three packed uint128's. Uses assembly because of Solidity language limitation which prevents
+     * slicing bytes stored in memory, rather than calldata.
+     */
+    function _decodePackedVotes(bytes memory voteData)
+        internal
+        pure
+        returns (
+            uint128 forVotes,
+            uint128 againstVotes,
+            uint128 abstainVotes
+        )
+    {
+        assembly {
+            forVotes := shr(128, mload(add(voteData, 0x20)))
+            againstVotes := and(_VOTEMASK, mload(add(voteData, 0x20)))
+            abstainVotes := shr(128, mload(add(voteData, 0x40)))
+        }
     }
 }
