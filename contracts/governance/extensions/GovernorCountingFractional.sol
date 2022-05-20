@@ -32,7 +32,6 @@ abstract contract GovernorCountingFractional is Governor {
 
     /**
      * @dev See {IGovernor-COUNTING_MODE}.
-     * TODO: Add param for how params is used?
      */
     // solhint-disable-next-line func-name-mixedcase
     function COUNTING_MODE() public pure virtual override returns (string memory) {
