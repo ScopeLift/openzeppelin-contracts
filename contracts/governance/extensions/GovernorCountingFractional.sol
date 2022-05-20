@@ -4,6 +4,7 @@
 pragma solidity ^0.8.0;
 
 import "../Governor.sol";
+import "../compatibility/GovernorCompatibilityBravo.sol";
 import "../../utils/math/SafeCast.sol";
 
 /**
@@ -12,14 +13,6 @@ import "../../utils/math/SafeCast.sol";
  * _Available since v4.X.X_
  */
 abstract contract GovernorCountingFractional is Governor {
-    /**
-     * @dev Supported vote types. Matches Governor Bravo ordering.
-     */
-    enum VoteType {
-        Against,
-        For,
-        Abstain
-    }
 
     struct ProposalVote {
         uint128 againstVotes;
@@ -109,11 +102,11 @@ abstract contract GovernorCountingFractional is Governor {
         uint8 support,
         uint256 weight
     ) internal {
-        if (support == uint8(VoteType.Against)) {
+        if (support == uint8(GovernorCompatibilityBravo.VoteType.Against)) {
             _proposalVotes[proposalId].againstVotes += SafeCast.toUint128(weight);
-        } else if (support == uint8(VoteType.For)) {
+        } else if (support == uint8(GovernorCompatibilityBravo.VoteType.For)) {
             _proposalVotes[proposalId].forVotes += SafeCast.toUint128(weight);
-        } else if (support == uint8(VoteType.Abstain)) {
+        } else if (support == uint8(GovernorCompatibilityBravo.VoteType.Abstain)) {
             _proposalVotes[proposalId].abstainVotes += SafeCast.toUint128(weight);
         } else {
             revert("GovernorCountingFractional: invalid support value, must be included in VoteType enum");
@@ -139,11 +132,11 @@ abstract contract GovernorCountingFractional is Governor {
             "GovernorCountingFractional: votes exceed weight"
         );
 
-        ProposalVote memory existingProposalVote = _proposalVotes[proposalId];
-        ProposalVote memory _proposalVote = ProposalVote(
-            existingProposalVote.againstVotes + againstVotes,
-            existingProposalVote.forVotes + forVotes,
-            existingProposalVote.abstainVotes + abstainVotes
+        ProposalVote memory _proposalVote = _proposalVotes[proposalId];
+        _proposalVote = ProposalVote(
+            _proposalVote.againstVotes + againstVotes,
+            _proposalVote.forVotes + forVotes,
+            _proposalVote.abstainVotes + abstainVotes
         );
 
         _proposalVotes[proposalId] = _proposalVote;
